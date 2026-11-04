@@ -346,12 +346,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
         };
     }
 
-    private static float ResolveTargetComponentCacheRefreshIntervalSeconds(PerfMode mode)
-    {
-        return mode == PerfMode.Gameplay
-            ? TargetComponentCacheRefreshGameplaySeconds
-            : TargetComponentCacheRefreshStudioSeconds;
-    }
 
     private void ScanUiTextIncremental(PerfMode mode, float now, int totalBudget)
     {
@@ -578,26 +572,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
         return true;
     }
 
-    private void RefreshNavigationComponentCacheIfNeeded(bool forceRefresh)
-    {
-        var now = Time.unscaledTime;
-        var mode = GetCurrentPerfMode();
-        if (!forceRefresh
-            && _cachedNavigationComponents.Count > 0
-            && now < _nextNavigationComponentCacheRefreshTime)
-        {
-            return;
-        }
-
-        _cachedNavigationComponents.Clear();
-        foreach (var component in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
-        {
-            _cachedNavigationComponents.Add(component);
-        }
-
-        _findObjectsEnumerationCount++;
-        _nextNavigationComponentCacheRefreshTime = now + ResolveTargetComponentCacheRefreshIntervalSeconds(mode);
-    }
 
     private void SpeakIfNotRecent(string text)
     {
