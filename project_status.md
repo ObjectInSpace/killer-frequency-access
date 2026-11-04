@@ -56,6 +56,22 @@ The user will not run more diagnostic builds; solve discovery from offline data.
   runtime, in which scene, and which components carry the interaction data otherwise. Check for a
   NavMesh.
 - Rip tooling is in `C:\Users\amock\RipWork`. `C:` has little free space, so use `D:`.
+- Rip finished (17 GB, `DONE 17:07:55`). Findings so far, all from `D:\KFRip\out\ExportedProject\Assets`:
+  - A NavMesh exists: `NavMeshData\NavMesh.asset`, `NavMesh_0.asset`, `NavMesh_1.asset`.
+  - Scripts are in `Scripts\Assembly-CSharp\*.cs` with `.cs.meta` GUIDs. `InteractableItem` is
+    `13b8dc465f2aa0397dcc414ce824adc6`, `InteractionScopeBase` `8cac237dfd371c58dd9d8ad47c846807`,
+    `RootScope` `f4885c083d4059e19ee787db0cdd99f5`.
+  - **Zero** references to those GUIDs in any scene (all 8 `__Scenes\*.unity`) or any prefab/asset file.
+    The scope scripts (`RootScope`, `DeskChairScope`, `ConsoleMixerScope`, `PinboardScope`,
+    `RecordDrawerScope`) are also absent from `SCN_Main`. So these are not placed in the scene as
+    components; they are probably added at runtime, or the rip does not link them.
+  - `SCN_Main.unity` (59 MB) has 21,677 MonoBehaviours and 22,430 GameObjects, no unresolved
+    `m_Script`. Its most-used script GUIDs (5,781 / 1,727 / 1,582 / 820 ...) have not been mapped to
+    class names yet. Map them with `grep -rl "guid: <id>" Scripts\Assembly-CSharp\*.meta`.
+  - Not yet checked: whether the rip's `GameObject\` prefab folder uses a different serialization,
+    and which components mark an interactable in the scene (for example `Interactable*`, collider
+    plus string-handle components). Also check how the game creates `InteractableItem` at runtime
+    (the decompiled stubs have no bodies; use Cpp2IL or AssetRipper's `Scripts` output).
 
 ## Open questions
 
