@@ -412,33 +412,81 @@ public sealed partial class KillerFrequencyAccessMod
 
     private void SpeakInRangeWithAction(Transform target)
     {
-        var verbs = GetPerformableVerbs(target);
+        var actions = GetPerformableVerbs(target);
         var name = GetSpokenName(target);
-        SpeakSelectionText(verbs.Count == 0 ? $"{name} in range" : $"{name} in range, {string.Join(", ", verbs)}");
+        SpeakSelectionText(actions.Count == 0 ? $"{name} in range" : $"{name} in range. {string.Join(". ", actions)}");
     }
 
-    /// <summary>Speaks the object the game reports the player is pointing at, when it changes.</summary>
+    /// <summary>
+    /// Speaks the object the game reports the player is pointing at, when it changes. The first
+    /// object-list run showed the observed object dropping to none between frames, which re-announced
+    /// the same object every 0.25 s; the marker is only cleared after half a second with nothing observed.
+    /// </summary>
     private void UpdateObservedInteractableAnnouncement()
     {
+        var now = Time.unscaledTime;
         if (IsMenuActive() || !TryGetObservedInteractable(out var observed))
         {
-            _lastObservedInteractableObjectId = -1;
+            if (_lastObservedInteractableObjectId != -1 && now - _lastObservedSeenTime > 0.5f)
+            {
+                _lastObservedInteractableObjectId = -1;
+            }
+
             return;
         }
 
+        _lastObservedSeenTime = now;
         var observedId = observed.GetInstanceID();
-        var now = Time.unscaledTime;
         if (observedId == _lastObservedInteractableObjectId
             || now - _lastObservedInteractableSpeakTime < ObservedInteractableSpeakCooldownSeconds)
         {
             return;
         }
 
-        var verbs = GetPerformableVerbs(observed);
+        var actions = GetPerformableVerbs(observed);
+        if (_placesForHeldIds.Contains(observed.transform.GetInstanceID())
+            && TryGetHeld(out var held, out _) && held != null)
+        {
+            // The game's CanDock accepts the held item here; in flat-screen mode it goes in with Place.
+            actions.Insert(0, $"Fits {GetSpokenName(held)}, {DescribePlaceKeys()}");
+        }
+
         var name = GetSpokenName(observed);
-        SpeakSelectionTextDedup($"observed|{observedId}", verbs.Count == 0 ? name : $"{name}, {string.Join(", ", verbs)}");
+        SpeakSelectionTextDedup($"observed|{observedId}", actions.Count == 0 ? name : $"{name}. {string.Join(". ", actions)}");
         _lastObservedInteractableSpeakTime = now;
         _lastObservedInteractableObjectId = observedId;
+    }
+
+    private float _lastObservedSeenTime;
+
+    /// <summary>"0.6 meters" under 3 m (desk scale), whole meters beyond.</summary>
+    private static string DescribeDistance(float meters)
+    {
+        return meters < 3f
+            ? $"{Math.Max(0.1f, (float)Math.Round(meters, 1)).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} meters"
+            : $"{Mathf.RoundToInt(meters)} meters";
+    }
+
+    /// <summary>"above" or "below" when the point is more than 0.3 m off the camera's height, else empty.</summary>
+    private static string DescribeHeight(Vector3 point)
+    {
+        var camera = GetInteractorCamera();
+        if (camera == null)
+        {
+            return string.Empty;
+        }
+
+        var dy = point.y - camera.transform.position.y;
+        return dy > 0.3f ? "above" : dy < -0.3f ? "below" : string.Empty;
+    }
+
+    /// <summary>"0.6 meters front right, below": distance from the player, direction, height.</summary>
+    private static string DescribeWhere(Transform origin, Vector3 point)
+    {
+        var distance = Vector3.Distance(origin.position, point);
+        var text = $"{DescribeDistance(distance)} {DescribeDirectionRelativeTo(origin, point)}";
+        var height = DescribeHeight(point);
+        return height.Length == 0 ? text : $"{text}, {height}";
     }
 
     private static bool TryResolveReachableDestination(Vector3 origin, Transform candidate, out Vector3 destination, out bool usedNavMeshPathing)
@@ -2022,20 +2070,17 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
-        var destination = target.Transform != null ? target.Transform.position : target.Destination;
-        var meters = Mathf.Max(1, Mathf.RoundToInt(Vector2.Distance(
-            new Vector2(origin.position.x, origin.position.z),
-            new Vector2(destination.x, destination.z))));
-        var direction = DescribeDirectionRelativeTo(origin, destination);
+        var point = target.Transform != null ? GetNearestPoint(target.Transform, origin.position) : target.Destination;
+        var where = DescribeWhere(origin, point);
         var position = $"{_selectedTargetIndex + 1} of {_reachableTargets.Count}";
         if (_filterScope == RoomScope.AllRooms && target.Transform != null)
         {
             var room = RoomOf(target.Transform.position);
-            SpeakSelectionText($"{displayName}, {meters} meters, {direction}, {room?.Name ?? "no room"}, {position}");
+            SpeakSelectionText($"{displayName}, {where}, {room?.Name ?? "no room"}, {position}");
             return;
         }
 
-        SpeakSelectionText($"{displayName}, {meters} meters, {direction}, {position}");
+        SpeakSelectionText($"{displayName}, {where}, {position}");
     }
 
     private static string DescribeDirectionRelativeTo(Transform origin, Vector3 destination)

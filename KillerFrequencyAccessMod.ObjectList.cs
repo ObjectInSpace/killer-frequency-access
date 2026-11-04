@@ -12,9 +12,11 @@ namespace Killer_Frequency_Access;
 /// objects. Choosing an object sets the room and category that [ and ] cycle through.
 ///
 /// Facts used:
-/// - Rooms are the game's Il2Cpp.Room components (25 in SCN_Main). A point is in a room when one of
-///   Room.volumes contains it. Names come from the hierarchy: floor folder plus room object, for
-///   example GroundFloor/BreakRoom = "Ground Floor Break Room".
+/// - Rooms are the game's Il2Cpp.Room components (25 in SCN_Main). Room.volumes is empty at runtime
+///   (first object-list run), so a room's space is the Unity OcclusionArea boxes on its children,
+///   as the game's files define them. Offline check (tools/rip/room_check.py): 797 of 804 SCN_Main
+///   interactables fall in a room. Names come from the hierarchy: floor folder plus room object,
+///   for example GroundFloor/BreakRoom = "Ground Floor Break Room".
 /// - Categories are the game's own component types on the interactable (see <see cref="Categories"/>).
 /// - Keys: the game's InputActions asset binds WASD, the arrows, E, Q, R, F, P, Tab, 1 to 3, the numpad,
 ///   Ctrl, Escape, F4, F5 and F9. O, Page Up, Page Down, Enter and Backspace are unbound.
@@ -49,20 +51,30 @@ public sealed partial class KillerFrequencyAccessMod
 
     private const string OtherCategory = "other";
 
+    /// <summary>Docks that accept the held item (PhysicsHoldableDock.CanDock), as a list category.</summary>
+    private const string FitsHeldCategory = "places for what you hold";
+
+    private HashSet<int> _placesForHeldIds = new();
+
+    private void RefreshPlacesForHeld()
+    {
+        _placesForHeldIds = new HashSet<int>(FindPlacesForHeldItem().ConvertAll(t => t.GetInstanceID()));
+    }
+
     private static readonly Dictionary<int, string> CategoryByInteractableId = new();
 
     private sealed class RoomInfo
     {
-        public RoomInfo(GameRoom room, string name, Bounds[] volumes)
+        public RoomInfo(GameRoom room, string name, List<OcclusionArea> areas)
         {
             Room = room;
             Name = name;
-            Volumes = volumes;
+            Areas = areas;
         }
 
         public GameRoom Room { get; }
         public string Name { get; }
-        public Bounds[] Volumes { get; }
+        public List<OcclusionArea> Areas { get; }
     }
 
     private enum ListLevel { Rooms, Categories, Objects }
@@ -292,8 +304,7 @@ public sealed partial class KillerFrequencyAccessMod
         var text = listed.Name;
         if (TryGetNavigationOrigin(out var origin))
         {
-            var meters = Mathf.Max(1, Mathf.RoundToInt(listed.Distance));
-            text += $", {meters} meters {DescribeDirectionRelativeTo(origin, listed.Transform.position)}";
+            text += $", {DescribeWhere(origin, GetNearestPoint(listed.Transform, origin.position))}";
         }
 
         if (includeRoom)
@@ -330,6 +341,11 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         _categoryChoices = new List<(string, int)> { (AllCategories, total) };
+        var fits = GatherListedObjects(_browseRoom.Scope, _browseRoom.Room, FitsHeldCategory).Count;
+        if (fits > 0)
+        {
+            _categoryChoices.Add((FitsHeldCategory, fits));
+        }
         foreach (var category in Categories)
         {
             if (counts.TryGetValue(category.Label, out var n))
@@ -370,6 +386,19 @@ public sealed partial class KillerFrequencyAccessMod
         _snapshotPlayerRoom = RoomOf(origin.position);
         var candidates = new Dictionary<int, Transform>();
         CollectGameInteractables(candidates);
+        RefreshPlacesForHeld();
+        if (_placesForHeldIds.Count > 0)
+        {
+            // A dock that fits the held item is listed even when none of its own actions is available.
+            foreach (var interactable in UnityEngine.Object.FindObjectsOfType<GameInteractableBase>())
+            {
+                var id = interactable == null ? 0 : interactable.transform.GetInstanceID();
+                if (interactable != null && _placesForHeldIds.Contains(id))
+                {
+                    candidates[id] = interactable.transform;
+                }
+            }
+        }
         foreach (var transform in candidates.Values)
         {
             if (!TryGetGameInteractable(transform, out var interactable))
@@ -395,7 +424,8 @@ public sealed partial class KillerFrequencyAccessMod
         return _listSnapshot.FindAll(listed =>
             listed.Transform != null
             && RoomMatches(scope, fixedRoom, _snapshotPlayerRoom, listed.Room)
-            && (category == AllCategories || listed.Category == category));
+            && (category == AllCategories
+                || (category == FitsHeldCategory ? _placesForHeldIds.Contains(listed.Transform.GetInstanceID()) : listed.Category == category)));
     }
 
     private static bool RoomMatches(RoomScope scope, RoomInfo? fixedRoom, RoomInfo? playerRoom, RoomInfo? objectRoom)
@@ -418,7 +448,14 @@ public sealed partial class KillerFrequencyAccessMod
             return false;
         }
 
-        if (_filterCategory != AllCategories && GetCategory(interactable) != _filterCategory)
+        if (_filterCategory == FitsHeldCategory)
+        {
+            if (!_placesForHeldIds.Contains(target.GetInstanceID()))
+            {
+                return false;
+            }
+        }
+        else if (_filterCategory != AllCategories && GetCategory(interactable) != _filterCategory)
         {
             return false;
         }
@@ -500,55 +537,60 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var name = BuildRoomName(room.transform);
-            Bounds[] volumes;
-            try
+            var areas = new List<OcclusionArea>();
+            for (var i = 0; i < room.transform.childCount; i++)
             {
-                var raw = room.volumes;
-                volumes = new Bounds[raw == null ? 0 : raw.Length];
-                for (var i = 0; i < volumes.Length; i++)
+                var area = room.transform.GetChild(i).GetComponent<OcclusionArea>();
+                if (area != null)
                 {
-                    volumes[i] = raw![i];
+                    areas.Add(area);
                 }
             }
-            catch (Exception ex)
+
+            if (areas.Count == 0)
             {
-                LogOnce($"room-volumes-error|{name}", $"[rooms] {name}: reading volumes failed: {ex.Message}");
-                volumes = Array.Empty<Bounds>();
+                LogOnce($"room-no-areas|{name}", $"[rooms] {name} has no OcclusionArea children; nothing can be placed in it");
             }
 
-            if (volumes.Length == 0)
-            {
-                LogOnce($"room-no-volumes|{name}", $"[rooms] {name} has no volumes; nothing can be placed in it");
-            }
-
-            rooms.Add(new RoomInfo(room, name, volumes));
+            rooms.Add(new RoomInfo(room, name, areas));
         }
 
         if (rooms.Count != _rooms.Count)
         {
-            MelonLoader.MelonLogger.Msg($"[rooms] {rooms.Count} rooms: {string.Join(", ", rooms.ConvertAll(r => $"{r.Name} ({r.Volumes.Length})"))}");
+            MelonLoader.MelonLogger.Msg($"[rooms] {rooms.Count} rooms: {string.Join(", ", rooms.ConvertAll(r => $"{r.Name} ({r.Areas.Count})"))}");
         }
 
         _rooms = rooms;
         return _rooms;
     }
 
-    /// <summary>The room whose volume contains <paramref name="point"/>; the smallest volume wins where rooms overlap.</summary>
+    /// <summary>
+    /// The room whose OcclusionArea box contains <paramref name="point"/>. The box is centre and size in
+    /// the area's local space. Where boxes overlap (13 objects in SCN_Main, at door frames), the
+    /// smallest box wins.
+    /// </summary>
     private static RoomInfo? RoomOf(Vector3 point)
     {
         RoomInfo? best = null;
         var bestVolume = float.MaxValue;
         foreach (var room in GetRooms())
         {
-            foreach (var bounds in room.Volumes)
+            foreach (var area in room.Areas)
             {
-                if (!bounds.Contains(point))
+                if (area == null)
                 {
                     continue;
                 }
 
-                var size = bounds.size;
-                var volume = size.x * size.y * size.z;
+                var local = area.transform.InverseTransformPoint(point) - area.center;
+                var half = area.size * 0.5f;
+                if (Mathf.Abs(local.x) > half.x || Mathf.Abs(local.y) > half.y || Mathf.Abs(local.z) > half.z)
+                {
+                    continue;
+                }
+
+                var scale = area.transform.lossyScale;
+                var volume = Mathf.Abs(area.size.x * scale.x * area.size.y * scale.y * area.size.z * scale.z);
                 if (volume < bestVolume)
                 {
                     bestVolume = volume;

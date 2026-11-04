@@ -56,10 +56,6 @@ button fuctional fixed	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fuseb
 detergent box	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Alleyway_SetDressing/General Set Dressing/P_Prop_Interactable_CleaningSupplies_DetergentBox
 detergent box	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Alleyway_SetDressing/P_Prop_Interactable_CleaningSupplies_DetergentBox
 detergent cylinder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Alleyway_SetDressing/P_Prop_Interactable_CleaningSupplies_DetergentCylinder
-dock fuse 1 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_1
-dock fuse 2 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_2
-dock fuse 3 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_3
-dock fuse 4 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_4
 door dumpster	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Functional/P_Door_Dumpster (1)/DefaultOrentation/P_DoorBody
 door dumpster	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Functional/P_Door_Dumpster (2)/DefaultOrentation/P_DoorBody
 door dumpster	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Functional/P_Door_Dumpster (3)/DefaultOrentation/P_DoorBody
@@ -76,6 +72,10 @@ door exterior	<<ART>>/P_Core_Station_Dressing_Intro/RadioStation_Dressing/Ground
 door exterior handle	<<ART>>/P_Core_Station_Dressing_Intro/RadioStation_Dressing/GroundFloor/GroundFloor_Hallway/Hero_Props/P_Door_Exterior/P_DoorBody/GraspableHandle
 door intro	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Alleyway_SetDressing/General Set Dressing/P_Door_Intro/P_DoorBody
 door intro handle	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Alleyway_SetDressing/General Set Dressing/P_Door_Intro/P_DoorBody/GraspableHandle
+fuse box 1 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_1
+fuse box 2 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_2
+fuse box 3 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_3
+fuse box 4 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_4
 fusebox puzzle door	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/P_DoorBody
 fusebox puzzle handle	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/LeverHandle/SM_HeroProp_FuseboxPuzzle_Handle/Handle
 fusebox puzzle handle	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/P_DoorBody/GraspableHandle
@@ -222,30 +222,10 @@ bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/Janitors_O
 bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_WC_01/Props/P_Prop_Interactable_CleaningSupplies_Bottle
 bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Props/P_Prop_Interactable_CleaningSupplies_Bottle
 brush	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_CleaningSupplies_Brush
-button 1	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_1/Button_1
-button 2	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_2/Button_2
-button 3	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_3/Button_3
-button 4	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_4/Button_4
-button 5	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_5/Button_5
-button 6	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_6/Button_6
-button 7	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_7/Button_7
-button 8	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_8/Button_8
-button eject	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Button_Eject
-button eject	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Button_Eject
 button fuctional broken	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_ControlBox/SM_Elevator_ControlBox/SM_Elevator_ControlBoxButtonVisuals/Button_FuctionalBroken
 button fuctional fixed	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_ControlBox/SM_Elevator_ControlBox/SM_Elevator_ControlBoxButtonVisuals/Button_FuctionalFixed
-button play	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_1/Button_Play_FS
-button play	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_2/Button_Play_FS
-button play	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_3/Button_Play_FS
-button play	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_4/Button_Play_FS
-button play	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_5/Button_Play_FS
-button play	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_6/Button_Play_FS
 button play	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Button_Play
 button play	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Button_Play
-button play	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_RecordPlayer/Functionality/Button_Play
-button stop	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Button_Stop
-button stop	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Button_Stop
-button stop	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_RecordPlayer/Functionality/Button_Stop
 cassette bumble bee	<<ART>>/<<DESIGN>>/Stories/DingDongDitch/P_HeroProp_CassetteBase_BumbleBee
 cassette case signed	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/Janitors_Office/Props/P_Prop_Interactable_Cassette_Case_Signed
 cassette grilling spree	<<ART>>/<<DESIGN>>/Stories/Takeout/TakeOutAssets/P_HeroProp_CassetteBase_GrillingSpree
@@ -257,6 +237,12 @@ cassette holder dock	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/First
 cassette holder dock	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProps_CassetteHolder/P_HeroProps_CassetteHolder_Dock (4)
 cassette holder dock	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProps_CassetteHolder/P_HeroProps_CassetteHolder_Dock (5)
 cassette master robbie	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProps_CassetteHolder/P_HeroProps_CassetteHolder_Dock (1)/AttachPoint/P_HeroProp_Cassette_MasterRobbie
+cassette player 02 slot	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Dock_Cassette
+cassette player eject button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Button_Eject
+cassette player eject button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Button_Eject
+cassette player slot	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Dock_Cassette
+cassette player stop button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Button_Stop
+cassette player stop button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Button_Stop
 cassette roddy snatcher	<<ART>>/<<DESIGN>>/Stories/RoddySnatcher/P_HeroProp_CassetteBase_RoddySnatcher
 cassette teddy gallows	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProps_CassetteHolder/P_HeroProps_CassetteHolder_Dock (3)/AttachPoint/P_HeroProp_Cassette_TeddyGallows
 clive evidence map location 01	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/P_HeroProp_Interactable_Clive_EvidenceMap_Location_01
@@ -292,11 +278,12 @@ collectables sleeve 06	<<ART>>/<<DESIGN>>/Records/P_HeroProp_Collectables_Sleeve
 collectables sleeve 09	<<ART>>/<<DESIGN>>/Records/P_HeroProp_Collectables_Sleeve_09
 collectables sleeve 10	<<ART>>/<<DESIGN>>/Records/P_HeroProp_Collectables_Sleeve_10
 computer	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Hero_Props/P_SetDressing_Computer (1)/ButtonInteractable
-console mixer button 06	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_ProducerRoom/Set_Dressing/P_HeroProp_ConsoleMixer_Producer (1)/ConsoleMIxer_Button_Functional/M_HeroProps_ConsoleMIxer_Button_06
-console mixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_01/M_HeroProps_ConsoleMIxer_Slider_01
-console mixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_02/M_HeroProps_ConsoleMIxer_Slider_01
-console mixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_03/M_HeroProps_ConsoleMIxer_Slider_01
-console mixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_04/M_HeroProps_ConsoleMIxer_Slider_01
+computer floppy disk slot	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Hero_Props/P_SetDressing_Computer (1)/FloppyDiskDock
+console ixer button 06	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_ProducerRoom/Set_Dressing/P_HeroProp_ConsoleMixer_Producer (1)/ConsoleMIxer_Button_Functional/M_HeroProps_ConsoleMIxer_Button_06
+console ixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_01/M_HeroProps_ConsoleMIxer_Slider_01
+console ixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_02/M_HeroProps_ConsoleMIxer_Slider_01
+console ixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_03/M_HeroProps_ConsoleMIxer_Slider_01
+console ixer slider 01 handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Slider_04/M_HeroProps_ConsoleMIxer_Slider_01
 container double door	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Set_Dressing/P_Container_StorageCabinet (1)/P_Container_Base_DoubleDoor/P_DoorBody_Left
 container double door	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Set_Dressing/P_Container_StorageCabinet (1)/P_Container_Base_DoubleDoor/P_DoorBody_Right
 container double door	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Set_Dressing/P_Container_StorageCabinet/P_Container_Base_DoubleDoor/P_DoorBody_Left
@@ -353,14 +340,13 @@ detergent box	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/Gen
 detergent box	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_CleaningSupplies_DetergentBox
 detergent cylinder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Alleyway_SetDressing/P_Prop_Interactable_CleaningSupplies_DetergentCylinder
 detergent cylinder	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_CleaningSupplies_DetergentCylinder
+dictaphone 1 play button	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_1/Button_Play_FS
+dictaphone 2 play button	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_2/Button_Play_FS
+dictaphone 3 play button	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_3/Button_Play_FS
+dictaphone 4 play button	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_4/Button_Play_FS
+dictaphone 5 play button	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_5/Button_Play_FS
+dictaphone 6 play button	<<ART>>/<<DESIGN>>/Stories/SaveClive/SaveCliveAssets/Tapes/P_HeroProp_Dictaphone_6/Button_Play_FS
 dippy bird	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_Office/Hero_Props/P_HeroProps_DippyBird
-dock cassette holder	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_HeroProp_CassettePlayer_Single/Dock_Cassette
-dock cassette holder	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_CassettePlayer_Single/Dock_Cassette
-dock fuse 1 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_1
-dock fuse 2 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_2
-dock fuse 3 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_3
-dock fuse 4 holder	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_4
-dock vinyl holder	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_RecordPlayer/Functionality/Dock_Vinyl
 door container varient	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_Office/Set_Dressing/P_Container_Printer/P_Door_Container_Varient/P_DoorBody
 door container varient	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_WC_01/Set_Dressing/P_SetDressing_Toilet/P_Door_Container_Varient/P_DoorBody
 door container varient	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_WC_01/Set_Dressing/P_SetDressing_Toilet/P_Door_Container_Varient/P_DoorBody
@@ -505,7 +491,6 @@ floor mop	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/Grou
 floppy disk barbara	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProp_FloppyDisk_Barbara
 floppy disk brad	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProp_FloppyDisk_Brad
 floppy disk deep cuts	<<ART>>/<<DESIGN>>/P_HeroProp_FloppyDisk_DeepCuts
-floppy disk dock holder	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Hero_Props/P_SetDressing_Computer (1)/FloppyDiskDock
 floppy disk forrest	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProp_FloppyDisk_Forrest
 floppy disk john	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProp_FloppyDisk_John
 floppy disk karen	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProp_FloppyDisk_Karen
@@ -532,6 +517,10 @@ fuse a 5	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_He
 fuse blown out	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_1/AttachPoint/P_HeroProp_FuseBase_BlownOut
 fuse blown out	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_3/AttachPoint/P_HeroProp_FuseBase_BlownOut
 fuse blown out	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_4/AttachPoint/P_HeroProp_FuseBase_BlownOut
+fuse box 1 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_1
+fuse box 2 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_2
+fuse box 3 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_3
+fuse box 4 slot	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/FuseBox/Dock_Fuse_4
 fusebox puzzle door	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/P_DoorBody
 fusebox puzzle handle	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/LeverHandle/SM_HeroProp_FuseboxPuzzle_Handle/Handle
 fusebox puzzle handle	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/P_DoorBody/GraspableHandle
@@ -547,9 +536,6 @@ ground floor manager office door	<<ART>>/P_Core_Station_Dressing/RadioStation_Dr
 ground floor manager office handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_ManagerOffice/Hero_Props/P_Door_BaseDoor/P_DoorBody/GraspableHandle
 ground floor stairwell door	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Stairwell/Hero_Props/P_Door_BaseDoor/P_DoorBody
 ground floor stairwell handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Stairwell/Hero_Props/P_Door_BaseDoor/P_DoorBody/GraspableHandle
-group 1 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Group1/Group1
-group 2 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Group2/Group2
-group 3 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Group3/Group3
 handheld radio button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Radios/P_SetDressing_Handheld_Radio (1)/InteractableButton_FS
 handheld radio button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Radios/P_SetDressing_Handheld_Radio (2)/InteractableButton_FS
 handheld radio button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Radios/P_SetDressing_Handheld_Radio/InteractableButton_FS
@@ -567,6 +553,16 @@ intercom button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloo
 intern card	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/InternDesk/P_HeroProp_Interactable_InternCard
 intern mug	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/InternDesk/P_Prop_Interactable_InternMug
 intern notepad	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/InternDesk/P_Prop_Interactable_InternNotepad
+keypad 0 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_0/InteractableButton
+keypad 1 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_1/InteractableButton
+keypad 2 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_2/InteractableButton
+keypad 3 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_3/InteractableButton
+keypad 4 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_4/InteractableButton
+keypad 5 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_5/InteractableButton
+keypad 6 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_6/InteractableButton
+keypad 7 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_7/InteractableButton
+keypad 8 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_8/InteractableButton
+keypad 9 button	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_9/InteractableButton
 kinetic desk toy 01	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Props/P_HeroProps_KineticDeskToy_01
 kinetic desk toy 01	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Props/P_HeroProps_KineticDeskToy_01/Movable
 kinetic desk toy 02	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Props/P_HeroProps_KineticDeskToy_02
@@ -583,7 +579,7 @@ kinetic desk toy 06	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstF
 lever handle	<<ART>>/P_Core_Alleyway_Structure/Alleyway_Dressing/Fusebox Puzzle/P_HeroProp_Elevator_Fusebox/SM_HeroProp_FuseboxPuzzle/LeverHandle
 lights on button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Hero Assets/P_Prop_Interactable_Switch/SM_Switch/LightsOnButton
 long broom	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/Basement/General Dressing/Props/P_Prop_Interactable_LongBroom
-lprecord disc 01	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_RecordBox (1)/Functionality/Disc/P_HeroProp_LPRecord_Disc_01
+lp record disc 01	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_RecordBox (1)/Functionality/Disc/P_HeroProp_LPRecord_Disc_01
 magazine closed alone	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_WatingRoom/Props/P_Prop_Interactable_Magazine_Closed_Alone (1)
 magazine closed alone	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_Magazine_Closed_Alone
 magazine closed alone	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Props/P_Prop_Interactable_Magazine_Closed_Alone
@@ -792,6 +788,9 @@ reception bell	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor
 reception desk door	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Set_Dressing/P_SetDressing_ReceptionDesk/P_DoorBody
 reception desk handle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Set_Dressing/P_SetDressing_ReceptionDesk/P_DoorBody/GraspableHandle
 record box	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_RecordBox (1)/Functionality
+record player play button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_RecordPlayer/Functionality/Button_Play
+record player stop button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_RecordPlayer/Functionality/Button_Stop
+record player vinyl slot	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_RecordPlayer/Functionality/Dock_Vinyl
 red herring note 01	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_Prop_Interactable_RedHerring_Note_01
 red herring note 02	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_Prop_Interactable_RedHerring_Note_02
 red herring note 03	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_Prop_Interactable_RedHerring_Note_03
@@ -822,6 +821,17 @@ small vhs dating	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFlo
 small vhs dating	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Props/P_Prop_Interactable_Small_VHS_Dating (2)
 small vhs no case	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_Small_VHS_NoCase
 small vhs ufo	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_ManagerOffice/Props/P_Prop_Interactable_Small_VHS_UFO
+soundboard 1 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_1/Button_1
+soundboard 2 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_2/Button_2
+soundboard 3 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_3/Button_3
+soundboard 4 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_4/Button_4
+soundboard 5 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_5/Button_5
+soundboard 6 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_6/Button_6
+soundboard 7 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_7/Button_7
+soundboard 8 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Button_8/Button_8
+soundboard group 1 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Group1/Group1
+soundboard group 2 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Group2/Group2
+soundboard group 3 button	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/FirstFloor_MainStudio/Hero_Props/P_Furniture_Desk_DJ/Desk_TestArrangement_02/DeskItems/P_HeroProp_ConsoleMixer_05/P_HeroProp_Soundboard/M_HeroProps_ConsoleMIxer_SoundboardAddon/Functional/Group3/Group3
 sponge	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_Sponge
 sponge	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BroomCloset/Props/P_Prop_Interactable_Sponge
 sponge	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BroomCloset/Props/P_Prop_Interactable_Sponge
@@ -831,16 +841,6 @@ spray bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/FirstFloor/Fi
 spray bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BreakRoom/Props/P_Prop_Interactable_CleaningSupplies_SprayBottle
 spray bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_BroomCloset/Props/P_Prop_Interactable_CleaningSupplies_SprayBottle
 spray bottle	<<ART>>/P_Core_Station_Dressing/RadioStation_Dressing/GroundFloor/GroundFloor_Lobby/Props/P_Prop_Interactable_CleaningSupplies_SprayBottle
-stabbed friend safe button 0	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_0/InteractableButton
-stabbed friend safe button 1	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_1/InteractableButton
-stabbed friend safe button 2	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_2/InteractableButton
-stabbed friend safe button 3	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_3/InteractableButton
-stabbed friend safe button 4	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_4/InteractableButton
-stabbed friend safe button 5	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_5/InteractableButton
-stabbed friend safe button 6	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_6/InteractableButton
-stabbed friend safe button 7	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_7/InteractableButton
-stabbed friend safe button 8	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_8/InteractableButton
-stabbed friend safe button 9	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_SetDressing_StabbedFriend_Safe/Safe/P_Container_Base_SingleDoor/P_DoorBody/Keypad/P_SetDressing_StabbedFriend_Safe_Button_9/InteractableButton
 sticky note dock holder	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProps_StickyNote_Dock (1)
 sticky note dock holder	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProps_StickyNote_Dock (2)
 sticky note dock holder	<<ART>>/<<DESIGN>>/Stories/StabbedFriend/P_HeroProps_StickyNote_Dock (3)

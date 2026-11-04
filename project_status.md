@@ -34,8 +34,9 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   objects), Backspace goes back a level (closes at the top). Choosing an object sets the room and
   category that `[` / `]` cycle through; Backspace with the list closed still auto-walks.
   Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
-- Rooms: the game's 25 `Il2Cpp.Room`s; a point is in a room when one of `Room.volumes` contains it.
-  Name = floor folder + room object ("Ground Floor Break Room"). Room levels: current room (follows
+- Rooms: the game's 25 `Il2Cpp.Room`s. `Room.volumes` is empty at runtime, so a room's space is
+  the Unity `OcclusionArea` boxes on its children (offline check `toolsipoom_check.py`: 797 of
+  804 SCN_Main objects fall in a room). Name = floor folder + room object ("Ground Floor Break Room"). Room levels: current room (follows
   the player), all rooms, each room. Entering a room is announced.
 - Categories: the game's component on the object, first match wins: story items
   (`StoryObjectCheckpoint`, or `PhysicsHoldable.onHeldStoryEvents` set), collectables
@@ -43,7 +44,22 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   tray items (`DockableInTray`), pinboard items, sticky notes, holders, objects (`PhysicsHoldable`), other.
 - No cap on the cycle list (it was the 14 nearest objects). Each entry says "N of M".
 - Actions spoken for the object you point at use `CanPerform(interactor)` (first run: `Available`
-  was true for drop and throw on items not held). Every spoken line is logged as `[speech]`.
+  was true for drop and throw on items not held), each with its keys read live from the game's
+  `InputActions` asset ("pick up, left click or numpad 0"). Interactions with no
+  `controllerInputs` are VR only (every Grasp/Release, 93 of 107 Dock) and are not listed or spoken.
+- Distances: one decimal under 3 m, plus "above" / "below" beyond 0.3 m from camera height.
+
+`KillerFrequencyAccessMod.HeldItems.cs`:
+- Announces what you hold (`GetPrimaryHeldInteractable` / `GetSecondaryHeldInteractable`) and
+  where it fits: every `PhysicsHoldableDock` whose `CanDock(held)` is true (the game's check, which
+  includes callbacks such as `VinylPlayer.OnCanDockVinylCallback`). In flat-screen mode an item goes
+  into a dock with Place (right click or numpad 2) while aiming at it. Object-list category
+  "places for what you hold"; pointing at a fitting dock says "Fits X, place with ...".
+- Logs `[held]`, `[performing]` (the interactor's `PerformingInteractions`), `[keys]`.
+
+Names: parts of a device are named after it (`toolsip\gen_names.py`, `DEVICES`): a holder, button
+or slider below `VinylPlayer` is "record player ..." ("record player vinyl slot"), likewise cassette
+player, dictaphone, soundboard, fuse box, keypad, handheld radio, computer, lever.
 
 Still old code, not yet rebuilt: the environment scan tones (raycast open-path probing, to be
 replaced by step 8) and NavMesh waypoint search in auto-walk.
@@ -92,15 +108,19 @@ Commit straight to master; no branches while the mod is unreleased.
   cycle list only took the nearest 14); `Available` true for drop/throw/place on items not held;
   `InteractionBase.Name` is an internal id ("pick-up", "fs place"), `Description` is "Undefined";
   13 name misses, all docked map items re-parented under `AttachPoint`.
-- 2026-11-04, object list build: installed, not yet run.
+- 2026-11-04, object list build: every object in "no room" (`Room.volumes` empty). Task "take a
+  record from the record box, put it on the turntable, press play": record found, turntable not.
+  Causes: the turntable was named "dock vinyl holder"; the mod never said what was held, where it
+  fits, or which key places it; the microphone was announced 12 times in 5 s (observed flicker);
+  every desk distance was "1 meters".
+- 2026-11-04, rooms/held items/keys build: installed, not yet run.
 
 ## Next step
 
-Run the object list build: O, Page Up/Down, Enter, Backspace; then `[` / `]` and Backspace to walk.
-Send `MelonLoader\Latest.log`. It now has `[speech]` (everything said), `[rooms]` (rooms and
-volume counts), `[observed]` (CanPerform per action on what you point at) and `[targets]`.
-Check: do objects land in the right rooms (or many in "no room"), do the categories make sense,
-does "can do now" match the game.
+Run the rooms/held items/keys build and retry the record task: take a record from the record box,
+put it on the record player ("record player vinyl slot"), press "record player play button".
+Send `MelonLoader\Latest.log`: `[rooms]`, `[held]` (fits N of M docks), `[keys]`, `[performing]`,
+`[observed]`, `[speech]`.
 
 The user runs test builds when one is needed. Answer anything the rip or decompiled code can
 answer offline first; ask for a run only when the answer exists only at runtime.

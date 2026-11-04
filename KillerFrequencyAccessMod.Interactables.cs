@@ -39,8 +39,8 @@ public sealed partial class KillerFrequencyAccessMod
         ["CollectInteraction"] = "collect",
         ["TakeInteraction"] = "take",
         ["FsPeekInteraction"] = "peek",
-        // On collectables. Its controller input is the same asset as FsPlaceInteraction's (rip).
-        ["DisableObjectOnDropInteraction"] = "place",
+        // Not listed: DisableObjectOnDropInteraction. Its input is Place on some objects and Drop on
+        // others (rip), so its verb comes from its input (InputVerbs).
     };
 
     /// <summary>Leaf object name to spoken name, only for leaf names that map to exactly one spoken name.</summary>
@@ -266,13 +266,13 @@ public sealed partial class KillerFrequencyAccessMod
             && IsSameInteractable(interactable, observed);
     }
 
-    /// <summary>Verbs of the interactions the game marks Available, highest Priority first.</summary>
+    /// <summary>Verbs of the flat-screen interactions the game marks Available, highest Priority first.</summary>
     private static List<string> GetAvailableVerbs(GameInteractableBase interactable)
     {
         var result = new List<(int Priority, string Verb)>();
         foreach (var interaction in interactable.GetComponents<GameInteraction>())
         {
-            if (interaction == null || !interaction.enabled)
+            if (interaction == null || !interaction.enabled || !HasFlatScreenInput(interaction))
             {
                 continue;
             }
@@ -312,7 +312,8 @@ public sealed partial class KillerFrequencyAccessMod
     }
 
     /// <summary>
-    /// Verbs the game says the player can do right now: InteractionBase.CanPerform with the player's
+    /// Actions with their keys ("pick up, left click or numpad 0") that the game says the player can do
+    /// right now: InteractionBase.CanPerform with the player's
     /// interactor. The first run showed Available is true for drop and throw on items not held, so
     /// Available alone does not mean "possible now".
     /// </summary>
@@ -333,6 +334,12 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var typeName = GetInteractionTypeName(interaction);
+            if (!HasFlatScreenInput(interaction))
+            {
+                log.Add($"{typeName}=VR only");
+                continue;
+            }
+
             bool canPerform;
             int priority;
             try
@@ -352,10 +359,10 @@ public sealed partial class KillerFrequencyAccessMod
                 continue;
             }
 
-            var verb = GetVerb(interaction);
-            if (verb.Length > 0 && !result.Exists(r => r.Verb == verb))
+            var action = DescribeActionWithKeys(interaction);
+            if (action.Length > 0 && !result.Exists(r => r.Verb == action))
             {
-                result.Add((priority, verb));
+                result.Add((priority, action));
             }
         }
 
@@ -395,7 +402,7 @@ public sealed partial class KillerFrequencyAccessMod
                 state = $"error {ex.Message}";
             }
 
-            parts.Add($"{GetInteractionTypeName(interaction)}={state}");
+            parts.Add($"{GetInteractionTypeName(interaction)}={state}{(HasFlatScreenInput(interaction) ? string.Empty : " (VR only)")}");
         }
 
         return string.Join(", ", parts);
@@ -410,7 +417,15 @@ public sealed partial class KillerFrequencyAccessMod
             return verb;
         }
 
-        LogOnce($"unknown-interaction|{typeName}", $"[targets] interaction class {typeName} is not in the verb table; spoken as its class name");
+        foreach (var input in GetFlatScreenInputs(interaction))
+        {
+            if (InputVerbs.TryGetValue(input, out var inputVerb))
+            {
+                return inputVerb;
+            }
+        }
+
+        LogOnce($"unknown-interaction|{typeName}", $"[targets] interaction class {typeName} is not in the verb table and has no known input; spoken as its class name");
         return typeName;
     }
 
