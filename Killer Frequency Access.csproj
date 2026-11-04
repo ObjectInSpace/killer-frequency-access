@@ -11,6 +11,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="decompiled\**" />
+    <EmbeddedResource Remove="decompiled\**" />
+    <None Remove="decompiled\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="MelonLoader">
       <HintPath>$(MelonLoaderDir)\net6\MelonLoader.dll</HintPath>
       <Private>false</Private>
@@ -65,6 +71,22 @@
     </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>$(Il2CppAssembliesDir)\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(Il2CppAssembliesDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppRadio.Actions">
+      <HintPath>$(Il2CppAssembliesDir)\Il2CppRadio.Actions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppRadio.Actions.Core">
+      <HintPath>$(Il2CppAssembliesDir)\Il2CppRadio.Actions.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppRadio.Core">
+      <HintPath>$(Il2CppAssembliesDir)\Il2CppRadio.Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Il2CppFMODUnity">
