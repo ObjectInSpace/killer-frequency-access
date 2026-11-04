@@ -35,7 +35,7 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   category that `[` / `]` cycle through; Backspace with the list closed still auto-walks.
   Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
 - Rooms: the game's 25 `Il2Cpp.Room`s. `Room.volumes` is empty at runtime, so a room's space is
-  the Unity `OcclusionArea` boxes on its children (offline check `toolsipoom_check.py`: 797 of
+  the Unity `OcclusionArea` boxes on its children (offline check `tools\rip\room_check.py`: 797 of
   804 SCN_Main objects fall in a room). Name = floor folder + room object ("Ground Floor Break Room"). Room levels: current room (follows
   the player), all rooms, each room. Entering a room is announced.
 - Categories: the game's component on the object, first match wins: story items
@@ -57,7 +57,7 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   "places for what you hold"; pointing at a fitting dock says "Fits X, place with ...".
 - Logs `[held]`, `[performing]` (the interactor's `PerformingInteractions`), `[keys]`.
 
-Names: parts of a device are named after it (`toolsip\gen_names.py`, `DEVICES`): a holder, button
+Names: parts of a device are named after it (`tools\rip\gen_names.py`, `DEVICES`): a holder, button
 or slider below `VinylPlayer` is "record player ..." ("record player vinyl slot"), likewise cassette
 player, dictaphone, soundboard, fuse box, keypad, handheld radio, computer, lever.
 
