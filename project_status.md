@@ -25,8 +25,22 @@ keywords and reflection guesses, and targets the wrong objects. It is being rebu
 5. Rooms and doors from `Room` / `RoomPortalDoor`.
 6. Rip `SCN_Main` with AssetRipper (pipeline in `C:\Users\amock\RipWork`) for a complete roster.
 7. Logging and a visit-every-object sweep, as in Date Everything Access.
+8. Audio guidance, after targeting works. Model it on Date Everything Access (`ObjectTracker.cs`,
+   `AccessibilityWatcher.AimCoach.cs`), not Before the Storm (third-person, speech-only clock
+   directions): one continuous tone for the selected target. Walking: pulse rate = distance,
+   stereo pan = heading error, one-shot chirp at landmarks (doors). Aiming (steady tone): pan =
+   horizontal error, pitch = vertical error, chirp when the game's own selection is the target.
+   Spoken aim coach as the alternative ("a little up", "far left"). Settings: tone or spoken.
+   Replaces the old environment-scan tone code. First-person desk scopes (mixer, pinboard) may
+   want aiming help more than route guidance.
 
 Commit straight to master; no branches while the mod is unreleased.
+
+## Test log
+
+- 2026-11-04, first InteractableItem build: "no nearby objects", and no `[targets]` log lines.
+  Zero results logged nothing (fixed). Rebuilt to always log counts (active and inactive items), the
+  missing-origin case, and to list items with any action even when none is AVAILABLE.
 
 ## Open questions
 

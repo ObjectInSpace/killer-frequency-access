@@ -16,7 +16,8 @@ public sealed partial class KillerFrequencyAccessMod
     /// <summary>Spoken label for each target, keyed by Transform instance id. Filled by <see cref="CollectGameInteractables"/>.</summary>
     private static readonly Dictionary<int, string> GameTargetLabels = new();
 
-    private string _lastInteractableLogSignature = string.Empty;
+    private bool _loggedMissingOrigin;
+    private string _lastInteractableLogSignature = "<never>";
 
     /// <summary>
     /// Adds every InteractableItem that currently has an available action to <paramref name="candidates"/>.
@@ -28,6 +29,7 @@ public sealed partial class KillerFrequencyAccessMod
         GameTargetLabels.Clear();
 
         var items = UnityEngine.Object.FindObjectsOfType<GameInteractableItem>();
+        var everything = Resources.FindObjectsOfTypeAll<GameInteractableItem>();
         var log = new StringBuilder();
         var signature = new StringBuilder();
 
@@ -81,9 +83,9 @@ public sealed partial class KillerFrequencyAccessMod
                 }
             }
 
-            if (skipReason.Length == 0 && availableActions.Count == 0)
+            if (skipReason.Length == 0 && allActions.Count == 0)
             {
-                skipReason = "nothing available";
+                skipReason = "no actions";
             }
 
             var id = itemTransform.GetInstanceID();
@@ -91,7 +93,9 @@ public sealed partial class KillerFrequencyAccessMod
             if (picked)
             {
                 candidates[id] = itemTransform;
-                GameTargetLabels[id] = $"{objectName}, {availableActions[0]}";
+                GameTargetLabels[id] = availableActions.Count > 0
+                    ? $"{objectName}, {availableActions[0]}"
+                    : $"{objectName}, not available now";
             }
 
             signature.Append(id).Append(picked ? '+' : '-').Append(availableActions.Count).Append(';');

@@ -283,6 +283,11 @@ public sealed partial class KillerFrequencyAccessMod
             if (!TryGetNavigationOrigin(out var origin))
             {
                 _selectedTargetIndex = -1;
+                if (!_loggedMissingOrigin)
+                {
+                    _loggedMissingOrigin = true;
+                    LoggerInstance.Warning("[targets] no navigation origin (no Player tag, CharacterController or main camera)");
+                }
                 return;
             }
 
