@@ -39,6 +39,8 @@ public sealed partial class KillerFrequencyAccessMod
         ["CollectInteraction"] = "collect",
         ["TakeInteraction"] = "take",
         ["FsPeekInteraction"] = "peek",
+        // On collectables. Its controller input is the same asset as FsPlaceInteraction's (rip).
+        ["DisableObjectOnDropInteraction"] = "place",
     };
 
     /// <summary>Leaf object name to spoken name, only for leaf names that map to exactly one spoken name.</summary>
@@ -309,6 +311,64 @@ public sealed partial class KillerFrequencyAccessMod
         return TryGetGameInteractable(target, out var interactable) ? GetAvailableVerbs(interactable) : new List<string>();
     }
 
+    /// <summary>
+    /// Verbs the game says the player can do right now: InteractionBase.CanPerform with the player's
+    /// interactor. The first run showed Available is true for drop and throw on items not held, so
+    /// Available alone does not mean "possible now".
+    /// </summary>
+    private static List<string> GetPerformableVerbs(GameInteractableBase interactable)
+    {
+        var result = new List<(int Priority, string Verb)>();
+        if (!TryGetPlayerInteractor(out var interactor))
+        {
+            return new List<string>();
+        }
+
+        var log = new List<string>();
+        foreach (var interaction in interactable.GetComponents<GameInteraction>())
+        {
+            if (interaction == null || !interaction.enabled)
+            {
+                continue;
+            }
+
+            var typeName = GetInteractionTypeName(interaction);
+            bool canPerform;
+            int priority;
+            try
+            {
+                canPerform = interaction.Available && interaction.CanPerform(interactor);
+                priority = interaction.Priority;
+            }
+            catch (Exception ex)
+            {
+                LogOnce($"canperform-error|{typeName}", $"[targets] CanPerform threw on {typeName}: {ex.Message}");
+                continue;
+            }
+
+            log.Add($"{typeName}={(canPerform ? "yes" : "no")}");
+            if (!canPerform)
+            {
+                continue;
+            }
+
+            var verb = GetVerb(interaction);
+            if (verb.Length > 0 && !result.Exists(r => r.Verb == verb))
+            {
+                result.Add((priority, verb));
+            }
+        }
+
+        MelonLoader.MelonLogger.Msg($"[observed] {GetSpokenName(interactable)}: {string.Join(", ", log)}");
+        result.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+        return result.ConvertAll(r => r.Verb);
+    }
+
+    private static List<string> GetPerformableVerbs(Transform target)
+    {
+        return TryGetGameInteractable(target, out var interactable) ? GetPerformableVerbs(interactable) : new List<string>();
+    }
+
     private static bool HasAvailableInteraction(Transform target)
     {
         return GetAvailableVerbs(target).Count > 0;
@@ -408,6 +468,12 @@ public sealed partial class KillerFrequencyAccessMod
         if (GameObjectNames.ByPath.TryGetValue(path, out var byPath))
         {
             spoken = byPath;
+        }
+        else if (GameObjectNames.ByPath.TryGetValue(path.Replace("/AttachPoint/", "/"), out var byDockedPath))
+        {
+            // First run: docked items are re-parented under an AttachPoint child at runtime
+            // (rip ".../ItemDock/Item", runtime ".../ItemDock/AttachPoint/Item").
+            spoken = byDockedPath;
         }
         else if (UniqueNameByLeaf.TryGetValue(transform.name, out var byLeaf))
         {

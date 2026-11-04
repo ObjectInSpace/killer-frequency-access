@@ -29,6 +29,22 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   the target as observed; "in reach" is the camera within the target's `fsMaxReachDistance` of
   its nearest `m_Colliders` entry.
 
+`KillerFrequencyAccessMod.ObjectList.cs` (object list, modelled on Date Everything Access's picker):
+- O opens or closes it. Page Up / Page Down move, Enter goes in (rooms, then categories, then
+  objects), Backspace goes back a level (closes at the top). Choosing an object sets the room and
+  category that `[` / `]` cycle through; Backspace with the list closed still auto-walks.
+  Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
+- Rooms: the game's 25 `Il2Cpp.Room`s; a point is in a room when one of `Room.volumes` contains it.
+  Name = floor folder + room object ("Ground Floor Break Room"). Room levels: current room (follows
+  the player), all rooms, each room. Entering a room is announced.
+- Categories: the game's component on the object, first match wins: story items
+  (`StoryObjectCheckpoint`, or `PhysicsHoldable.onHeldStoryEvents` set), collectables
+  (`CollectInteraction`), doors, drawers, buttons, sliders, cassettes, floppy disks, records, fuses,
+  tray items (`DockableInTray`), pinboard items, sticky notes, holders, objects (`PhysicsHoldable`), other.
+- No cap on the cycle list (it was the 14 nearest objects). Each entry says "N of M".
+- Actions spoken for the object you point at use `CanPerform(interactor)` (first run: `Available`
+  was true for drop and throw on items not held). Every spoken line is logged as `[speech]`.
+
 Still old code, not yet rebuilt: the environment scan tones (raycast open-path probing, to be
 replaced by step 8) and NavMesh waypoint search in auto-walk.
 
@@ -72,16 +88,19 @@ Commit straight to master; no branches while the mod is unreleased.
 
 - 2026-11-04, first InteractableItem build: "no nearby objects", and no `[targets]` log lines.
 - 2026-11-04, rebuilt build: 0 `InteractableItem`s at runtime. Explained by the rip (wrong class).
-- 2026-11-04, typed targeting build: installed, not yet run.
+- 2026-11-04, typed targeting build: better but not enough. Log: 549 of 639 objects listed (the
+  cycle list only took the nearest 14); `Available` true for drop/throw/place on items not held;
+  `InteractionBase.Name` is an internal id ("pick-up", "fs place"), `Description` is "Undefined";
+  13 name misses, all docked map items re-parented under `AttachPoint`.
+- 2026-11-04, object list build: installed, not yet run.
 
 ## Next step
 
-Run the typed targeting build. Cycle targets with `[` / `]`, auto-walk with Backspace, look at
-objects. Then send `MelonLoader\Latest.log`. The run answers what only runtime can:
-- `[targets] listed N of M`: whether `Available` filters sensibly (for example, does "drop" show
-  only while holding something).
-- `[interactions] <Class>: Name=... Description=...`: what those properties hold.
-- `[names] not in GameObjectNames: <path>`: objects whose runtime path differs from the rip.
+Run the object list build: O, Page Up/Down, Enter, Backspace; then `[` / `]` and Backspace to walk.
+Send `MelonLoader\Latest.log`. It now has `[speech]` (everything said), `[rooms]` (rooms and
+volume counts), `[observed]` (CanPerform per action on what you point at) and `[targets]`.
+Check: do objects land in the right rooms (or many in "no room"), do the categories make sense,
+does "can do now" match the game.
 
 The user runs test builds when one is needed. Answer anything the rip or decompiled code can
 answer offline first; ask for a run only when the answer exists only at runtime.
@@ -91,9 +110,8 @@ answer offline first; ask for a run only when the answer exists only at runtime.
 
 ## Open questions
 
-- What `InteractionBase.Name` and `Description` return (logged by the current build).
-- Whether `Available` is false for actions outside the current scope (for example, mixer sliders
-  while standing).
+- Whether `Room.volumes` cover every object, or some land in no room.
+- Whether `CanPerform` needs the item to be hovered (logged by `[observed]`).
 - Free walking is the normal state (observed 2026-11-04); a dialog choice blocks it until answered.
   Which other locations set `LocationBase.allowMovement` false is still unknown.
 

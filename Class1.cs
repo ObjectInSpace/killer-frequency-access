@@ -172,6 +172,7 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
         HandleObjectNavigationHotkeys();
         UpdateAutoWalk(Time.unscaledDeltaTime);
         UpdateObservedInteractableAnnouncement();
+        UpdatePlayerRoomAnnouncement();
 
         var now = Time.unscaledTime;
         var perfMode = GetCurrentPerfMode();

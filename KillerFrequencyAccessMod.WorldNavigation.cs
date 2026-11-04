@@ -43,10 +43,21 @@ public sealed partial class KillerFrequencyAccessMod
                     StopAutoWalk(false);
                 }
 
+                if (_isObjectListOpen)
+                {
+                    CloseObjectList(string.Empty);
+                }
+
                 return;
             }
 
             UpdateEnvironmentScanMode();
+
+            if (HandleObjectListKeys())
+            {
+                MarkNavigationInteractionActive();
+                return;
+            }
 
             if (IsCyclePreviousPressed())
             {
@@ -289,53 +300,22 @@ public sealed partial class KillerFrequencyAccessMod
 
             var originPosition = origin.position;
             var candidateByObjectId = new Dictionary<int, Transform>();
-            var perfMode = GetCurrentPerfMode();
             CollectGameInteractables(candidateByObjectId);
 
-            if (candidateByObjectId.Count == 0)
+            // Every object that passes the object-list filter (room and category); no count cap.
+            foreach (var targetTransform in candidateByObjectId.Values)
             {
-                _selectedTargetIndex = -1;
-                return;
-            }
-
-            var orderedCandidates = new List<(Transform Target, float Distance)>(candidateByObjectId.Count);
-            foreach (var pair in candidateByObjectId)
-            {
-                var targetTransform = pair.Value;
-                if (targetTransform == null || !targetTransform.gameObject.activeInHierarchy)
+                if (targetTransform == null
+                    || !targetTransform.gameObject.activeInHierarchy
+                    || !MatchesActiveFilter(targetTransform, originPosition))
                 {
                     continue;
                 }
 
-                var proximityPoint = ResolveTargetProximityPoint(originPosition, targetTransform);
-                var distance = Vector2.Distance(
-                    new Vector2(originPosition.x, originPosition.z),
-                    new Vector2(proximityPoint.x, proximityPoint.z));
-                orderedCandidates.Add((targetTransform, distance));
-            }
-
-            orderedCandidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-            var maxCandidateLimit = perfMode == PerfMode.StudioLike
-                ? Mathf.Min(MaxCurrentRoomTargetCandidates, 18)
-                : MaxCurrentRoomTargetCandidates;
-            var candidateLimit = Mathf.Min(maxCandidateLimit, orderedCandidates.Count);
-            var validationAttempts = 0;
-            for (var i = 0; i < candidateLimit; i++)
-            {
-                if (validationAttempts >= MaxPathValidationAttemptsPerRefresh
-                    || _reachableTargets.Count >= MaxWalkableTargetsPerRefresh)
+                if (TryCreateNearbyTarget(originPosition, targetTransform, out var target))
                 {
-                    break;
+                    _reachableTargets.Add(target);
                 }
-
-                var targetTransform = orderedCandidates[i].Target;
-                if (!TryCreateNearbyTarget(originPosition, targetTransform, out var target))
-                {
-                    continue;
-                }
-
-                validationAttempts++;
-                _reachableTargets.Add(target);
             }
 
             _reachableTargets.Sort((a, b) => a.DistanceMeters.CompareTo(b.DistanceMeters));
@@ -344,6 +324,12 @@ public sealed partial class KillerFrequencyAccessMod
             {
                 _selectedTargetIndex = -1;
                 return;
+            }
+
+            if (_pendingSelectObjectId != -1)
+            {
+                previousId = _pendingSelectObjectId;
+                _pendingSelectObjectId = -1;
             }
 
             _selectedTargetIndex = 0;
@@ -388,11 +374,6 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         var distance = Vector2.Distance(new Vector2(origin.x, origin.z), new Vector2(nearest.x, nearest.z));
-        if (distance <= 0.4f)
-        {
-            return false;
-        }
-
         target = new ReachableTarget(candidate.GetInstanceID(), candidate, GetSpokenName(candidate), nearest, distance);
         return true;
     }
@@ -431,7 +412,7 @@ public sealed partial class KillerFrequencyAccessMod
 
     private void SpeakInRangeWithAction(Transform target)
     {
-        var verbs = GetAvailableVerbs(target);
+        var verbs = GetPerformableVerbs(target);
         var name = GetSpokenName(target);
         SpeakSelectionText(verbs.Count == 0 ? $"{name} in range" : $"{name} in range, {string.Join(", ", verbs)}");
     }
@@ -453,7 +434,7 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
-        var verbs = GetAvailableVerbs(observed);
+        var verbs = GetPerformableVerbs(observed);
         var name = GetSpokenName(observed);
         SpeakSelectionTextDedup($"observed|{observedId}", verbs.Count == 0 ? name : $"{name}, {string.Join(", ", verbs)}");
         _lastObservedInteractableSpeakTime = now;
@@ -574,7 +555,7 @@ public sealed partial class KillerFrequencyAccessMod
     {
         if (_reachableTargets.Count == 0)
         {
-            SpeakSelectionText("No nearby objects");
+            SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
             return;
         }
 
@@ -603,7 +584,7 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
-        SpeakSelectionText("No nearby objects");
+        SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
     }
 
     private bool IsTemporarilyUnreachableTarget(int objectId, float now)
@@ -639,7 +620,7 @@ public sealed partial class KillerFrequencyAccessMod
             }
             if (_reachableTargets.Count == 0)
             {
-                SpeakSelectionText("No nearby objects");
+                SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
                 return;
             }
         }
@@ -654,7 +635,7 @@ public sealed partial class KillerFrequencyAccessMod
             }
             if (_reachableTargets.Count == 0)
             {
-                SpeakSelectionText("No nearby objects");
+                SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
                 return;
             }
 
@@ -2046,7 +2027,15 @@ public sealed partial class KillerFrequencyAccessMod
             new Vector2(origin.position.x, origin.position.z),
             new Vector2(destination.x, destination.z))));
         var direction = DescribeDirectionRelativeTo(origin, destination);
-        SpeakSelectionText($"{displayName}, {meters} meters, {direction}");
+        var position = $"{_selectedTargetIndex + 1} of {_reachableTargets.Count}";
+        if (_filterScope == RoomScope.AllRooms && target.Transform != null)
+        {
+            var room = RoomOf(target.Transform.position);
+            SpeakSelectionText($"{displayName}, {meters} meters, {direction}, {room?.Name ?? "no room"}, {position}");
+            return;
+        }
+
+        SpeakSelectionText($"{displayName}, {meters} meters, {direction}, {position}");
     }
 
     private static string DescribeDirectionRelativeTo(Transform origin, Vector3 destination)

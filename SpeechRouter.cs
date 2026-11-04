@@ -40,6 +40,8 @@ internal static class SpeechRouter
             return;
         }
 
+        // Every spoken line goes to the log, so a test run shows exactly what the player heard.
+        _logger?.Msg($"[speech] {text}");
         RefreshBackend(false);
         if (TrySpeakWithActiveBackend(text))
         {
