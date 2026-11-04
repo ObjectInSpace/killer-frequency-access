@@ -68,8 +68,9 @@ Commit straight to master; no branches while the mod is unreleased.
 
 ## Next step
 
-Do step 3: switch discovery to `Il2CppActions.Interactables.Interactable`. The user will not run
-diagnostic builds, so the next build should be one meant to work, with logging kept in.
+Do step 3: switch discovery to `Il2CppActions.Interactables.Interactable`, with logging kept in.
+The user will run test builds when one is needed. Answer anything the rip or decompiled code can
+answer offline first; ask for a run only when the answer exists only at runtime.
 
 - Rip: `D:\KFRip\out\ExportedProject\Assets` (17 GB, from the trimmed copy `D:\KFRip\game-lite`).
   `C:` has little free space, so use `D:`.
