@@ -112,6 +112,13 @@ answer offline first; ask for a run only when the answer exists only at runtime.
 
 - Whether `Room.volumes` cover every object, or some land in no room.
 - Whether `CanPerform` needs the item to be hovered (logged by `[observed]`).
+- "Next object to interact with" (user request, 2026-11-04): the game has no objective, hint or
+  waypoint system. `StoryObjectCheckpoint` is a save system (narrative time -> which objects are
+  active), not an objective. Story logic is ~46 `Story` objects (`<<DESIGN>>/Stories/*`), each a Bolt
+  flow macro reacting to `OnPlayerInteraction`, with `Story.currentChapter` at runtime. Unchecked
+  lead: whether the macros (e.g. SaveClive, guid c1f31075761cc004cbfef2b35617969f) tie chapters to
+  specific scene objects. If so, "objects the active chapters wait for" could be a category; it
+  would not be a single definite next object.
 - Free walking is the normal state (observed 2026-11-04); a dialog choice blocks it until answered.
   Which other locations set `LocationBase.allowMovement` false is still unknown.
 
