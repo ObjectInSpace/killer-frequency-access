@@ -7,23 +7,46 @@ Last updated: 2026-11-04
 Unreleased. Loads in MelonLoader, speaks through NVDA, reads menus. World navigation
 (`KillerFrequencyAccessMod.WorldNavigation.cs`, about 5,600 lines) finds interactables by name
 keywords and reflection guesses, and targets the wrong objects. It is being rebuilt, not patched.
+The current build finds interactables through `Il2Cpp.InteractableItem`, which is the wrong class
+(see Findings), so it reports "no nearby objects".
 
 ## Findings (2026-11-04)
 
-- The game has 16 object types and a small set of scopes (walking, seated, mixer, pinboard,
-  record drawer). It is a desk, not an open world. See `docs\game-api.md`.
+- The game is a radio station the player walks around in first person, with desk scopes (mixer,
+  pinboard, record drawer). See `docs\game-api.md`.
 - The old mod never referenced the game's own assemblies, so it could not ask the game what is
   interactable.
+- **Discovery solved from the rip.** The game has two interaction systems in code. The one the
+  scenes use is Radio.Actions: every interactable carries `Il2CppActions.Interactables.Interactable`
+  (a `ControllerBaseInteractable` / `Il2Cpp.InteractableBase`), with actions from
+  `Il2CppInteractables.*` (`PickUpInteraction`, `UseInteraction`, `GraspInteraction`,
+  `FsBoundedMotionInteraction`, ...), all deriving from `Il2CppActions.InteractionBase`.
+  `Il2Cpp.InteractableItem` and the `RootScope`/`DeskChairScope`/... scopes are never placed in any
+  scene or prefab. That is why the runtime count was 0.
+- SCN_Main has 804 interactables; SCN_Intro 51, SCN_Epilogue 46, SCN_Menu 6. Full lists with
+  each object's scripts: `docs\rip\interactables_*.txt`.
+- Every `interactionScope` field in the scenes is null, so scope filtering has to come from the
+  runtime (`ControllerActionManager.currentScope`, `InteractionBase.Scope`, `CanPerform`).
+- Items have no on-screen name (the reticle is an icon). Names must come from cleaned-up
+  GameObject names plus a hand table, or `InteractionBase.Name`/`Description` if they hold text.
+- Hover hooks: `ControllerBaseInteractor.observedInteractable`,
+  `OnStartHoverOverPrimaryInteraction`, `ControllerActionManager.hoveredPrimaryInteraction`.
+- NavMesh: yes. SCN_Main uses `NavMesh_0.asset`, Intro and Menu `NavMesh_1.asset`, Epilogue
+  `NavMesh.asset`. No walkable bake of our own is needed.
+- SCN_Main has 25 `Room`s, 17 `RoomPortalDoor`s, 59 `DoorOpenable`s.
 
 ## Plan
 
 1. Decompiled reference and `docs\game-api.md`. **Done.**
 2. Reference `Assembly-CSharp`, `Il2CppRadio.Actions`, `Il2CppRadio.Actions.Core` in the csproj.
-3. Replace the keyword and collider guessing with `InteractableItem` plus
-   `GetInteractionStatuses`, filtered by the current scope. Name items from the game's strings.
-4. Hook what the game shows on screen so the focused item is announced as the game labels it.
+   **Done.**
+3. Replace discovery with `Il2CppActions.Interactables.Interactable` and its `Interactions`
+   (`Available`, `CanPerform` with the player's `ControllerBaseInteractor`). Drop the
+   `InteractableItem` code. Name items from cleaned GameObject names plus a table.
+4. Announce what the player is pointing at from the interactor's hover
+   (`observedInteractable` / `OnStartHoverOverPrimaryInteraction`).
 5. Rooms and doors from `Room` / `RoomPortalDoor`.
-6. Rip `SCN_Main` with AssetRipper (pipeline in `C:\Users\amock\RipWork`) for a complete roster.
+6. Rip and roster of interactables. **Done** (`docs\rip\`). Positions are not in the roster yet.
 7. Logging and a visit-every-object sweep, as in Date Everything Access.
 8. Audio guidance, after targeting works. Model it on Date Everything Access (`ObjectTracker.cs`,
    `AccessibilityWatcher.AimCoach.cs`), not Before the Storm (third-person, speech-only clock
@@ -32,7 +55,7 @@ keywords and reflection guesses, and targets the wrong objects. It is being rebu
    horizontal error, pitch = vertical error, chirp when the game's own selection is the target.
    Spoken aim coach as the alternative ("a little up", "far left"). Settings: tone or spoken.
    Replaces the old environment-scan tone code. First-person desk scopes (mixer, pinboard) may
-   want aiming help more than route guidance.
+   want aiming help more than route guidance. Paths can use the game's NavMesh.
 
 Commit straight to master; no branches while the mod is unreleased.
 
@@ -41,44 +64,23 @@ Commit straight to master; no branches while the mod is unreleased.
 - 2026-11-04, first InteractableItem build: "no nearby objects", and no `[targets]` log lines.
   Zero results logged nothing (fixed). Rebuilt to always log counts (active and inactive items), the
   missing-origin case, and to list items with any action even when none is AVAILABLE.
+- 2026-11-04, rebuilt build: 0 `InteractableItem`s at runtime. Explained by the rip (wrong class).
 
-## Next step (handoff, 2026-11-04)
+## Next step
 
-The user will not run more diagnostic builds; solve discovery from offline data.
-- Facts: at runtime `FindObjectsOfType<Il2Cpp.InteractableItem>()` returned 0 active objects, so the
-  "no nearby objects" message is a discovery problem, not a filter. Installed DLL = commit ed720ac
-  (it also logs a `[probe]`, but the user has not sent that log).
-- A rip of the game is at `D:\KFRip\out` (AssetRipper, run from `D:\KFRip\game-lite`, a trimmed copy
-  without audio banks or .resS). Check `D:\KFRip\rip_run.log` for a `DONE` line and look in
-  `D:\KFRip\out\ExportedProject\Assets`.
-- To do: find `SCN_Main` and the other scenes in the rip. Check whether `InteractableItem` (a
-  MonoBehaviour with `_stringHandle`, `_interactions`) is placed in the scene or only added at
-  runtime, in which scene, and which components carry the interaction data otherwise. Check for a
-  NavMesh.
-- Rip tooling is in `C:\Users\amock\RipWork`. `C:` has little free space, so use `D:`.
-- Rip finished (17 GB, `DONE 17:07:55`). Findings so far, all from `D:\KFRip\out\ExportedProject\Assets`:
-  - A NavMesh exists: `NavMeshData\NavMesh.asset`, `NavMesh_0.asset`, `NavMesh_1.asset`.
-  - Scripts are in `Scripts\Assembly-CSharp\*.cs` with `.cs.meta` GUIDs. `InteractableItem` is
-    `13b8dc465f2aa0397dcc414ce824adc6`, `InteractionScopeBase` `8cac237dfd371c58dd9d8ad47c846807`,
-    `RootScope` `f4885c083d4059e19ee787db0cdd99f5`.
-  - **Zero** references to those GUIDs in any scene (all 8 `__Scenes\*.unity`) or any prefab/asset file.
-    The scope scripts (`RootScope`, `DeskChairScope`, `ConsoleMixerScope`, `PinboardScope`,
-    `RecordDrawerScope`) are also absent from `SCN_Main`. So these are not placed in the scene as
-    components; they are probably added at runtime, or the rip does not link them.
-  - `SCN_Main.unity` (59 MB) has 21,677 MonoBehaviours and 22,430 GameObjects, no unresolved
-    `m_Script`. Its most-used script GUIDs (5,781 / 1,727 / 1,582 / 820 ...) have not been mapped to
-    class names yet. Map them with `grep -rl "guid: <id>" Scripts\Assembly-CSharp\*.meta`.
-  - Not yet checked: whether the rip's `GameObject\` prefab folder uses a different serialization,
-    and which components mark an interactable in the scene (for example `Interactable*`, collider
-    plus string-handle components). Also check how the game creates `InteractableItem` at runtime
-    (the decompiled stubs have no bodies; use Cpp2IL or AssetRipper's `Scripts` output).
+Do step 3: switch discovery to `Il2CppActions.Interactables.Interactable`. The user will not run
+diagnostic builds, so the next build should be one meant to work, with logging kept in.
+
+- Rip: `D:\KFRip\out\ExportedProject\Assets` (17 GB, from the trimmed copy `D:\KFRip\game-lite`).
+  `C:` has little free space, so use `D:`.
+- Scene tools: `C:\Users\amock\RipWork\kf_scene_tools` (see `docs\game-api.md`, "Scenes").
 
 ## Open questions
 
-- Does `SCN_Main` have a NavMesh? Decides whether pathing needs our own walkable bake.
+- What `InteractionBase.Name` and `Description` return (text, an ID, or empty).
 - Free walking is the normal state (observed 2026-11-04); a dialog choice blocks it until answered. Which
   other locations set `LocationBase.allowMovement` false is still unknown.
-- Which UI hook fires reliably for the focused item.
+- Which hover hook fires reliably for the focused item.
 
 ## Reference mods
 

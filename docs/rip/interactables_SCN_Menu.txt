@@ -1,0 +1,10 @@
+count 6
+5 ('DropInteraction', 'FsInspectInteraction', 'FsPlaceInteraction', 'FsSwapInHandsInteraction', 'FsThrowInteraction', 'PickUpInteraction')
+1 ('Button', 'UseInteraction')
+=====
+'<<ART>>'/P_Core_MainMenu/Dressing Assets/P_Prop_Interactable_BeerBottle_Brown | 1 | DropInteraction,FsInspectInteraction,FsPlaceInteraction,FsSwapInHandsInteraction,FsThrowInteraction,Occludee,PausablePhysics,PhysicsAudio,PhysicsHoldable,PickUpInteraction,RestorableObject
+'<<ART>>'/P_Core_MainMenu/Dressing Assets/P_Prop_Interactable_BeerBottle_Brown (1) | 1 | DropInteraction,FsInspectInteraction,FsPlaceInteraction,FsSwapInHandsInteraction,FsThrowInteraction,Occludee,PausablePhysics,PhysicsAudio,PhysicsHoldable,PickUpInteraction,RestorableObject
+'<<ART>>'/P_Core_MainMenu/Dressing Assets/P_Prop_Interactable_BeerCanEmpty | 1 | DropInteraction,FsInspectInteraction,FsPlaceInteraction,FsSwapInHandsInteraction,FsThrowInteraction,Occludee,PausablePhysics,PhysicsAudio,PhysicsHoldable,PickUpInteraction,RestorableObject
+'<<ART>>'/P_Core_MainMenu/Dressing Assets/P_Prop_Interactable_BeerCanEmpty (1) | 1 | DropInteraction,FsInspectInteraction,FsPlaceInteraction,FsSwapInHandsInteraction,FsThrowInteraction,Occludee,PausablePhysics,PhysicsAudio,PhysicsHoldable,PickUpInteraction,RestorableObject
+'<<ART>>'/P_Core_MainMenu/Dressing Assets/P_Prop_Interactable_BeerCanEmpty (2) | 1 | DropInteraction,FsInspectInteraction,FsPlaceInteraction,FsSwapInHandsInteraction,FsThrowInteraction,Occludee,PausablePhysics,PhysicsAudio,PhysicsHoldable,PickUpInteraction,RestorableObject
+'<<ART>>'/P_Core_MainMenu/Dressing Assets/P_SetDressing_Handheld_Radio/InteractableButton_FS | 1 | Button,ButtonAnimation,ButtonSound,Occludee,RumbleOneShot,UseInteraction
