@@ -42,6 +42,21 @@ Commit straight to master; no branches while the mod is unreleased.
   Zero results logged nothing (fixed). Rebuilt to always log counts (active and inactive items), the
   missing-origin case, and to list items with any action even when none is AVAILABLE.
 
+## Next step (handoff, 2026-11-04)
+
+The user will not run more diagnostic builds; solve discovery from offline data.
+- Facts: at runtime `FindObjectsOfType<Il2Cpp.InteractableItem>()` returned 0 active objects, so the
+  "no nearby objects" message is a discovery problem, not a filter. Installed DLL = commit ed720ac
+  (it also logs a `[probe]`, but the user has not sent that log).
+- A rip of the game is at `D:\KFRip\out` (AssetRipper, run from `D:\KFRip\game-lite`, a trimmed copy
+  without audio banks or .resS). Check `D:\KFRip\rip_run.log` for a `DONE` line and look in
+  `D:\KFRip\out\ExportedProject\Assets`.
+- To do: find `SCN_Main` and the other scenes in the rip. Check whether `InteractableItem` (a
+  MonoBehaviour with `_stringHandle`, `_interactions`) is placed in the scene or only added at
+  runtime, in which scene, and which components carry the interaction data otherwise. Check for a
+  NavMesh.
+- Rip tooling is in `C:\Users\amock\RipWork`. `C:` has little free space, so use `D:`.
+
 ## Open questions
 
 - Does `SCN_Main` have a NavMesh? Decides whether pathing needs our own walkable bake.
