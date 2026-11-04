@@ -112,11 +112,81 @@ public sealed partial class KillerFrequencyAccessMod
             log.AppendLine();
         }
 
-        var newSignature = signature.ToString();
+        var newSignature = $"{items.Length}/{everything.Length}|{signature}";
         if (!string.Equals(newSignature, _lastInteractableLogSignature, StringComparison.Ordinal))
         {
             _lastInteractableLogSignature = newSignature;
-            LoggerInstance.Msg($"[targets] {GameTargetLabels.Count} usable of {items.Length} InteractableItems:\n{log}");
+            LoggerInstance.Msg(
+                $"[targets] listed {GameTargetLabels.Count}; active InteractableItems={items.Length}, "
+                + $"including inactive={everything.Length}\n{log}");
+            if (items.Length == 0)
+            {
+                LogInteractableProbe();
+            }
+        }
+    }
+
+    /// <summary>
+    /// One-shot evidence dump for when the game reports no InteractableItems: loaded scenes, counts of the
+    /// related game types, and the most common component types whose names suggest interaction.
+    /// </summary>
+    private void LogInteractableProbe()
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            sb.Append("[probe] scenes:");
+            for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            {
+                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                sb.Append(' ').Append(scene.name).Append(scene.isLoaded ? "" : "(not loaded)");
+            }
+            sb.AppendLine();
+            sb.Append("[probe] counts (all incl. inactive): ")
+                .Append("InteractableItem=").Append(Resources.FindObjectsOfTypeAll<GameInteractableItem>().Length)
+                .Append(", InteractionBase=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.InteractionBase>().Length)
+                .Append(", InteractionScopeBase=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.InteractionScopeBase>().Length)
+                .Append(", Room=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.Room>().Length)
+                .Append(", RoomPortal=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.RoomPortal>().Length)
+                .Append(", DoorOpenable=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.DoorOpenable>().Length)
+                .AppendLine();
+            sb.Append("[probe] InteractionHandler.Instance(): ")
+                .Append(Il2Cpp.InteractionHandler.Instance() == null ? "null" : "present")
+                .AppendLine();
+
+            var counts = new Dictionary<string, int>();
+            foreach (var behaviour in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
+            {
+                if (behaviour == null)
+                {
+                    continue;
+                }
+
+                var typeName = behaviour.GetType().FullName ?? behaviour.GetType().Name;
+                if (typeName.IndexOf("Interact", StringComparison.OrdinalIgnoreCase) < 0
+                    && typeName.IndexOf("Door", StringComparison.OrdinalIgnoreCase) < 0
+                    && typeName.IndexOf("Scope", StringComparison.OrdinalIgnoreCase) < 0
+                    && typeName.IndexOf("Dock", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                counts[typeName] = counts.TryGetValue(typeName, out var n) ? n + 1 : 1;
+            }
+
+            var ordered = new List<KeyValuePair<string, int>>(counts);
+            ordered.Sort((a, b) => b.Value.CompareTo(a.Value));
+            sb.Append("[probe] interaction-like components:");
+            for (var i = 0; i < ordered.Count && i < 25; i++)
+            {
+                sb.Append(i == 0 ? " " : ", ").Append(ordered[i].Key).Append('=').Append(ordered[i].Value);
+            }
+
+            LoggerInstance.Msg(sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            LoggerInstance.Warning($"[probe] failed: {ex.Message}");
         }
     }
 
