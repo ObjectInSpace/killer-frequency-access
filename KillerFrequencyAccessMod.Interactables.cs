@@ -2,215 +2,483 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
-using GameActionStatus = Il2Cpp.ActionStatus;
-using GameInteractableItem = Il2Cpp.InteractableItem;
+using GameInteractableBase = Il2Cpp.InteractableBase;
+using GameInteraction = Il2CppActions.InteractionBase;
+using GameInteractor = Il2Cpp.ControllerBaseInteractor;
 
 namespace Killer_Frequency_Access;
 
 /// <summary>
-/// Finds interactable objects by asking the game, not by guessing from names.
-/// Every interactable in Killer Frequency carries an Il2Cpp.InteractableItem (see docs/game-api.md).
+/// Everything the mod knows about interactable objects, taken from the game's own types.
+/// Facts used (see docs/game-api.md, verified against the rip of every scene):
+/// - Every interactable carries Il2CppActions.Interactables.Interactable, an Il2Cpp.InteractableBase (searched as the base).
+/// - Its actions are Il2CppActions.InteractionBase components on the same GameObject.
+/// - Its colliders are InteractableBase.m_Colliders; its reach is InteractableBase.fsMaxReachDistance.
+/// - What the player is pointing at is ControllerBaseInteractor.observedInteractable (one interactor per scene).
+/// - The game shows no item names; names come from GameObjectNames.ByPath, generated from the rip.
 /// </summary>
 public sealed partial class KillerFrequencyAccessMod
 {
-    /// <summary>Spoken label for each target, keyed by Transform instance id. Filled by <see cref="CollectGameInteractables"/>.</summary>
-    private static readonly Dictionary<int, string> GameTargetLabels = new();
+    /// <summary>Spoken verb per interaction class. The class names are the complete set found in the rip.</summary>
+    private static readonly Dictionary<string, string> InteractionVerbs = new(StringComparer.Ordinal)
+    {
+        ["PickUpInteraction"] = "pick up",
+        ["FsInspectInteraction"] = "inspect",
+        ["FsPlaceInteraction"] = "place",
+        ["DropInteraction"] = "drop",
+        ["FsThrowInteraction"] = "throw",
+        ["FsSwapInHandsInteraction"] = "swap hands",
+        ["DockInteraction"] = "put in",
+        ["UndockInteraction"] = "take out",
+        ["RedockInteraction"] = "put back",
+        ["GraspInteraction"] = "grab",
+        ["ReleaseInteraction"] = "let go",
+        ["FsBoundedMotionInteraction"] = "drag",
+        ["UseInteraction"] = "use",
+        ["TouchInteraction"] = "touch",
+        ["CollectInteraction"] = "collect",
+        ["TakeInteraction"] = "take",
+        ["FsPeekInteraction"] = "peek",
+    };
 
+    /// <summary>Leaf object name to spoken name, only for leaf names that map to exactly one spoken name.</summary>
+    private static readonly Dictionary<string, string> UniqueNameByLeaf = BuildUniqueLeafIndex();
+
+    /// <summary>Spoken name per Interactable instance, fixed the first time it is seen (items move when held or docked).</summary>
+    private static readonly Dictionary<int, string> NameByInteractableId = new();
+
+    private static readonly HashSet<string> LoggedOnce = new(StringComparer.Ordinal);
+
+    private static GameInteractor? _playerInteractor;
     private bool _loggedMissingOrigin;
     private string _lastInteractableLogSignature = "<never>";
 
     /// <summary>
-    /// Adds every InteractableItem that currently has an available action to <paramref name="candidates"/>.
-    /// Items that are inactive, stored, collider-less or have nothing available are skipped, and every
-    /// decision is written to the log (once per change) so a play session shows what the game reported.
+    /// Adds every active InteractableBase with at least one available action to <paramref name="candidates"/>,
+    /// keyed by Transform instance id. Each decision is logged when the set changes.
     /// </summary>
     private void CollectGameInteractables(Dictionary<int, Transform> candidates)
     {
-        GameTargetLabels.Clear();
-
-        var items = UnityEngine.Object.FindObjectsOfType<GameInteractableItem>();
-        var everything = Resources.FindObjectsOfTypeAll<GameInteractableItem>();
+        var interactables = UnityEngine.Object.FindObjectsOfType<GameInteractableBase>();
         var log = new StringBuilder();
         var signature = new StringBuilder();
+        var listed = 0;
 
-        foreach (var item in items)
+        foreach (var interactable in interactables)
         {
-            if (item == null)
+            if (interactable == null)
             {
                 continue;
             }
 
-            var itemTransform = item.transform;
-            var scopeName = DescribeScope(item);
-            var objectName = HumanizeEnum(item._stringHandle.ToString(), item.gameObject.name);
-
-            string skipReason = string.Empty;
-            var availableActions = new List<string>();
-            var allActions = new List<string>();
-
-            if (!item.gameObject.activeInHierarchy)
+            var skipReason = string.Empty;
+            if (!interactable.isActiveAndEnabled)
             {
-                skipReason = "inactive";
+                skipReason = "disabled";
             }
-            else if (item.stored)
+            else if (interactable.OculusOnly)
             {
-                skipReason = "stored";
-            }
-            else if (item.InteractableCollider == null)
-            {
-                skipReason = "no collider";
+                skipReason = "VR only";
             }
 
-            try
+            var available = GetAvailableVerbs(interactable);
+            if (skipReason.Length == 0 && available.Count == 0)
             {
-                item.GetInteractionStatuses(out var ids, out var statuses);
-                var count = ids == null ? 0 : ids.Count;
-                for (var i = 0; i < count && statuses != null && i < statuses.Count; i++)
-                {
-                    var actionName = HumanizeEnum(ids![i].ToString(), string.Empty);
-                    allActions.Add($"{actionName}={statuses[i]}");
-                    if (statuses[i] == GameActionStatus.AVAILABLE)
-                    {
-                        availableActions.Add(actionName);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (skipReason.Length == 0)
-                {
-                    skipReason = $"status error: {ex.Message}";
-                }
+                skipReason = "no available action";
             }
 
-            if (skipReason.Length == 0 && allActions.Count == 0)
-            {
-                skipReason = "no actions";
-            }
-
-            var id = itemTransform.GetInstanceID();
+            var id = interactable.transform.GetInstanceID();
             var picked = skipReason.Length == 0;
             if (picked)
             {
-                candidates[id] = itemTransform;
-                GameTargetLabels[id] = availableActions.Count > 0
-                    ? $"{objectName}, {availableActions[0]}"
-                    : $"{objectName}, not available now";
+                candidates[id] = interactable.transform;
+                listed++;
             }
 
-            signature.Append(id).Append(picked ? '+' : '-').Append(availableActions.Count).Append(';');
-            log.Append("  ")
-                .Append(picked ? "[+] " : "[-] ")
-                .Append(objectName)
-                .Append(" (").Append(itemTransform.name).Append(')')
-                .Append(" scope=").Append(scopeName)
-                .Append(" actions=[").Append(string.Join(", ", allActions)).Append(']');
+            signature.Append(id).Append(picked ? '+' : '-').Append(available.Count).Append(';');
+            log.Append("  ").Append(picked ? "[+] " : "[-] ")
+                .Append(GetSpokenName(interactable))
+                .Append(" actions=[").Append(DescribeAllInteractions(interactable)).Append(']');
             if (!picked)
             {
                 log.Append(" skipped: ").Append(skipReason);
             }
+
             log.AppendLine();
         }
 
-        var newSignature = $"{items.Length}/{everything.Length}|{signature}";
+        var newSignature = $"{interactables.Length}|{signature}";
         if (!string.Equals(newSignature, _lastInteractableLogSignature, StringComparison.Ordinal))
         {
             _lastInteractableLogSignature = newSignature;
-            LoggerInstance.Msg(
-                $"[targets] listed {GameTargetLabels.Count}; active InteractableItems={items.Length}, "
-                + $"including inactive={everything.Length}\n{log}");
-            if (items.Length == 0)
-            {
-                LogInteractableProbe();
-            }
+            LoggerInstance.Msg($"[targets] listed {listed} of {interactables.Length} active Interactables\n{log}");
         }
+    }
+
+    /// <summary>The game Interactable that owns <paramref name="target"/> (the Interactable itself, or the nearest one above it).</summary>
+    private static bool TryGetGameInteractable(Transform? target, out GameInteractableBase interactable)
+    {
+        interactable = null!;
+        if (target == null)
+        {
+            return false;
+        }
+
+        var found = target.GetComponentInParent<GameInteractableBase>();
+        if (found == null)
+        {
+            return false;
+        }
+
+        interactable = found;
+        return true;
     }
 
     /// <summary>
-    /// One-shot evidence dump for when the game reports no InteractableItems: loaded scenes, counts of the
-    /// related game types, and the most common component types whose names suggest interaction.
+    /// The player's interactor. SCN_Main, Intro, Epilogue and Menu each hold exactly one, on the PlayerController
+    /// GameObject that also carries the player's CharacterController.
     /// </summary>
-    private void LogInteractableProbe()
+    private static bool TryGetPlayerInteractor(out GameInteractor interactor)
     {
-        try
+        if (_playerInteractor == null || !_playerInteractor.isActiveAndEnabled)
         {
-            var sb = new StringBuilder();
-            sb.Append("[probe] scenes:");
-            for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
-            {
-                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
-                sb.Append(' ').Append(scene.name).Append(scene.isLoaded ? "" : "(not loaded)");
-            }
-            sb.AppendLine();
-            sb.Append("[probe] counts (all incl. inactive): ")
-                .Append("InteractableItem=").Append(Resources.FindObjectsOfTypeAll<GameInteractableItem>().Length)
-                .Append(", InteractionBase=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.InteractionBase>().Length)
-                .Append(", InteractionScopeBase=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.InteractionScopeBase>().Length)
-                .Append(", Room=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.Room>().Length)
-                .Append(", RoomPortal=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.RoomPortal>().Length)
-                .Append(", DoorOpenable=").Append(Resources.FindObjectsOfTypeAll<Il2Cpp.DoorOpenable>().Length)
-                .AppendLine();
-            sb.Append("[probe] InteractionHandler.Instance(): ")
-                .Append(Il2Cpp.InteractionHandler.Instance() == null ? "null" : "present")
-                .AppendLine();
-
-            var counts = new Dictionary<string, int>();
-            foreach (var behaviour in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
-            {
-                if (behaviour == null)
-                {
-                    continue;
-                }
-
-                var typeName = behaviour.GetType().FullName ?? behaviour.GetType().Name;
-                if (typeName.IndexOf("Interact", StringComparison.OrdinalIgnoreCase) < 0
-                    && typeName.IndexOf("Door", StringComparison.OrdinalIgnoreCase) < 0
-                    && typeName.IndexOf("Scope", StringComparison.OrdinalIgnoreCase) < 0
-                    && typeName.IndexOf("Dock", StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    continue;
-                }
-
-                counts[typeName] = counts.TryGetValue(typeName, out var n) ? n + 1 : 1;
-            }
-
-            var ordered = new List<KeyValuePair<string, int>>(counts);
-            ordered.Sort((a, b) => b.Value.CompareTo(a.Value));
-            sb.Append("[probe] interaction-like components:");
-            for (var i = 0; i < ordered.Count && i < 25; i++)
-            {
-                sb.Append(i == 0 ? " " : ", ").Append(ordered[i].Key).Append('=').Append(ordered[i].Value);
-            }
-
-            LoggerInstance.Msg(sb.ToString());
+            _playerInteractor = UnityEngine.Object.FindObjectOfType<GameInteractor>();
         }
-        catch (Exception ex)
-        {
-            LoggerInstance.Warning($"[probe] failed: {ex.Message}");
-        }
+
+        interactor = _playerInteractor!;
+        return interactor != null;
     }
 
-    private static string DescribeScope(GameInteractableItem item)
+    /// <summary>What the game says the player is pointing at right now.</summary>
+    private static bool TryGetObservedInteractable(out GameInteractableBase observed)
+    {
+        observed = null!;
+        if (!TryGetPlayerInteractor(out var interactor))
+        {
+            return false;
+        }
+
+        var value = interactor.observedInteractable;
+        if (value == null)
+        {
+            return false;
+        }
+
+        observed = value;
+        return true;
+    }
+
+    private static bool IsSameInteractable(GameInteractableBase? left, GameInteractableBase? right)
+    {
+        return left != null && right != null && left.GetInstanceID() == right.GetInstanceID();
+    }
+
+    /// <summary>The camera the game raycasts from when choosing what the player points at.</summary>
+    private static Camera? GetInteractorCamera()
+    {
+        if (TryGetPlayerInteractor(out var interactor) && interactor.interactorCamera != null)
+        {
+            return interactor.interactorCamera;
+        }
+
+        return Camera.main;
+    }
+
+    /// <summary>The Interactable's own collider (from m_Colliders) nearest to <paramref name="from"/>.</summary>
+    private static bool TryGetInteractableCollider(GameInteractableBase interactable, Vector3 from, out Collider collider)
+    {
+        collider = null!;
+        var colliders = interactable.m_Colliders;
+        if (colliders == null)
+        {
+            return false;
+        }
+
+        var best = float.MaxValue;
+        for (var i = 0; i < colliders.Count; i++)
+        {
+            var candidate = colliders[i];
+            if (candidate == null || !candidate.enabled || !candidate.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            var distance = (candidate.ClosestPoint(from) - from).sqrMagnitude;
+            if (distance < best)
+            {
+                best = distance;
+                collider = candidate;
+            }
+        }
+
+        return collider != null;
+    }
+
+    /// <summary>Nearest point of the Interactable's colliders to <paramref name="from"/>; its position if it has none.</summary>
+    private static Vector3 GetNearestPoint(Transform target, Vector3 from)
+    {
+        if (TryGetGameInteractable(target, out var interactable)
+            && TryGetInteractableCollider(interactable, from, out var collider))
+        {
+            return collider.ClosestPoint(from);
+        }
+
+        return target.position;
+    }
+
+    /// <summary>Centre of the Interactable's nearest collider, the point to look at so the game's raycast hits it.</summary>
+    private static Vector3 GetAimPoint(Transform target, Vector3 from)
+    {
+        if (TryGetGameInteractable(target, out var interactable)
+            && TryGetInteractableCollider(interactable, from, out var collider))
+        {
+            return collider.bounds.center;
+        }
+
+        return target.position;
+    }
+
+    /// <summary>True when the camera is within the Interactable's own fsMaxReachDistance of its nearest collider.</summary>
+    private bool IsWithinReach(Transform target)
+    {
+        var camera = GetInteractorCamera();
+        if (camera == null || !TryGetGameInteractable(target, out var interactable))
+        {
+            return false;
+        }
+
+        var from = camera.transform.position;
+        if (!TryGetInteractableCollider(interactable, from, out var collider))
+        {
+            return false;
+        }
+
+        return Vector3.Distance(from, collider.ClosestPoint(from)) <= interactable.fsMaxReachDistance;
+    }
+
+    /// <summary>True when the game itself reports <paramref name="target"/> as the object the player points at.</summary>
+    private bool IsObservedByGame(Transform target)
+    {
+        return TryGetGameInteractable(target, out var interactable)
+            && TryGetObservedInteractable(out var observed)
+            && IsSameInteractable(interactable, observed);
+    }
+
+    /// <summary>Verbs of the interactions the game marks Available, highest Priority first.</summary>
+    private static List<string> GetAvailableVerbs(GameInteractableBase interactable)
+    {
+        var result = new List<(int Priority, string Verb)>();
+        foreach (var interaction in interactable.GetComponents<GameInteraction>())
+        {
+            if (interaction == null || !interaction.enabled)
+            {
+                continue;
+            }
+
+            bool isAvailable;
+            int priority;
+            try
+            {
+                isAvailable = interaction.Available;
+                priority = interaction.Priority;
+            }
+            catch (Exception ex)
+            {
+                LogOnce($"available-error|{GetInteractionTypeName(interaction)}", $"[targets] Available threw on {GetInteractionTypeName(interaction)}: {ex.Message}");
+                continue;
+            }
+
+            if (!isAvailable)
+            {
+                continue;
+            }
+
+            var verb = GetVerb(interaction);
+            if (verb.Length > 0 && !result.Exists(r => r.Verb == verb))
+            {
+                result.Add((priority, verb));
+            }
+        }
+
+        result.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+        return result.ConvertAll(r => r.Verb);
+    }
+
+    private static List<string> GetAvailableVerbs(Transform target)
+    {
+        return TryGetGameInteractable(target, out var interactable) ? GetAvailableVerbs(interactable) : new List<string>();
+    }
+
+    private static bool HasAvailableInteraction(Transform target)
+    {
+        return GetAvailableVerbs(target).Count > 0;
+    }
+
+    /// <summary>Every interaction on the object with its Available flag, for the log.</summary>
+    private static string DescribeAllInteractions(GameInteractableBase interactable)
+    {
+        var parts = new List<string>();
+        foreach (var interaction in interactable.GetComponents<GameInteraction>())
+        {
+            if (interaction == null)
+            {
+                continue;
+            }
+
+            string state;
+            try
+            {
+                state = interaction.Available ? "available" : "unavailable";
+            }
+            catch (Exception ex)
+            {
+                state = $"error {ex.Message}";
+            }
+
+            parts.Add($"{GetInteractionTypeName(interaction)}={state}");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    private static string GetVerb(GameInteraction interaction)
+    {
+        var typeName = GetInteractionTypeName(interaction);
+        LogInteractionTextOnce(typeName, interaction);
+        if (InteractionVerbs.TryGetValue(typeName, out var verb))
+        {
+            return verb;
+        }
+
+        LogOnce($"unknown-interaction|{typeName}", $"[targets] interaction class {typeName} is not in the verb table; spoken as its class name");
+        return typeName;
+    }
+
+    /// <summary>The Il2Cpp class name (for example PickUpInteraction), not the interop wrapper's.</summary>
+    private static string GetInteractionTypeName(GameInteraction interaction)
     {
         try
         {
-            var scope = item.Scope;
-            return scope == null ? "none" : scope.GetType().Name;
+            return interaction.GetIl2CppType().Name;
         }
         catch
         {
-            return "?";
+            return interaction.GetType().Name;
         }
     }
 
-    /// <summary>"PICK_UP" becomes "pick up". NONE (or empty) falls back to <paramref name="fallback"/>.</summary>
-    private static string HumanizeEnum(string enumName, string fallback)
+    /// <summary>Open question: what InteractionBase.Name and Description hold. Logged once per class.</summary>
+    private static void LogInteractionTextOnce(string typeName, GameInteraction interaction)
     {
-        if (string.IsNullOrWhiteSpace(enumName) || string.Equals(enumName, "NONE", StringComparison.Ordinal))
+        var key = $"interaction-text|{typeName}";
+        if (LoggedOnce.Contains(key))
         {
-            return string.IsNullOrWhiteSpace(fallback) ? "object" : ReadableObjectName(fallback);
+            return;
         }
 
-        return enumName.Replace('_', ' ').ToLowerInvariant();
+        string name, description;
+        try
+        {
+            name = interaction.Name ?? "<null>";
+            description = interaction.Description ?? "<null>";
+        }
+        catch (Exception ex)
+        {
+            name = description = $"<error {ex.Message}>";
+        }
+
+        LogOnce(key, $"[interactions] {typeName}: Name=\"{name}\" Description=\"{description}\"");
+    }
+
+    /// <summary>
+    /// Spoken name from the rip-generated table: by full hierarchy path, else by a leaf name that maps to
+    /// exactly one spoken name. A miss is logged and the object's own name is spoken.
+    /// </summary>
+    private static string GetSpokenName(GameInteractableBase interactable)
+    {
+        var id = interactable.GetInstanceID();
+        if (NameByInteractableId.TryGetValue(id, out var cached))
+        {
+            return cached;
+        }
+
+        var transform = interactable.transform;
+        var path = BuildHierarchyPath(transform);
+        string spoken;
+        if (GameObjectNames.ByPath.TryGetValue(path, out var byPath))
+        {
+            spoken = byPath;
+        }
+        else if (UniqueNameByLeaf.TryGetValue(transform.name, out var byLeaf))
+        {
+            spoken = byLeaf;
+        }
+        else
+        {
+            spoken = ReadableObjectName(transform.name);
+            LogOnce($"name-miss|{path}", $"[names] not in GameObjectNames: {path}");
+        }
+
+        NameByInteractableId[id] = spoken;
+        return spoken;
+    }
+
+    private static string GetSpokenName(Transform target)
+    {
+        return TryGetGameInteractable(target, out var interactable)
+            ? GetSpokenName(interactable)
+            : ReadableObjectName(target.name);
+    }
+
+    private static string BuildHierarchyPath(Transform transform)
+    {
+        var names = new List<string>();
+        for (var current = transform; current != null; current = current.parent)
+        {
+            names.Add(current.name);
+        }
+
+        names.Reverse();
+        return string.Join("/", names);
+    }
+
+    private static Dictionary<string, string> BuildUniqueLeafIndex()
+    {
+        var byLeaf = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var pair in GameObjectNames.ByPath)
+        {
+            var slash = pair.Key.LastIndexOf('/');
+            var leaf = slash >= 0 ? pair.Key[(slash + 1)..] : pair.Key;
+            if (byLeaf.TryGetValue(leaf, out var existing))
+            {
+                if (existing != null && existing != pair.Value)
+                {
+                    byLeaf[leaf] = null;
+                }
+            }
+            else
+            {
+                byLeaf[leaf] = pair.Value;
+            }
+        }
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in byLeaf)
+        {
+            if (pair.Value != null)
+            {
+                result[pair.Key] = pair.Value;
+            }
+        }
+
+        return result;
+    }
+
+    private static void LogOnce(string key, string message)
+    {
+        if (LoggedOnce.Add(key))
+        {
+            MelonLoader.MelonLogger.Msg(message);
+        }
     }
 }

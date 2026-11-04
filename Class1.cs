@@ -19,7 +19,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private const float RepeatCooldownSeconds = 0.75f;
     private const float SelectionSpeakDebounceSeconds = 0.18f;
     private const float ObservedInteractableSpeakCooldownSeconds = 0.2f;
-    private const float InteractionHandlerSearchRetrySeconds = 1.0f;
     private const float TargetRefreshDebounceSeconds = 0.25f;
     private const float SlowNavigationFallbackCooldownSeconds = 0.9f;
     private const float UnreachableTargetRetrySeconds = 2.0f;
@@ -38,7 +37,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private const float AutoTurnDegreesPerSecond = 300f;
     private const float InteractionHorizontalToleranceDegrees = 15f;
     private const float InteractionVerticalToleranceDegrees = 12f;
-    private const float HandIconFallbackRaycastDistance = 4.5f;
     private const float EnvironmentScanDistance = 20f;
     private const float EnvironmentScanUpdateIntervalSeconds = 0.08f;
     private const float EnvironmentScanCueGraceSeconds = 0.2f;
@@ -122,7 +120,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private string _lastSelectionSpeechKey = string.Empty;
     private float _lastSelectionSpeechTime = -100f;
     private float _lastObservedInteractableSpeakTime = -100f;
-    private float _nextInteractionHandlerSearchTime = -100f;
     private float _pathGuidanceLastDistance = -1f;
     private float _pathStallElapsed;
     private float _pathStallLastSampleTime = -100f;
@@ -144,7 +141,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private float _targetRefreshTotalMilliseconds;
     private int _findObjectsEnumerationCount;
     private Transform? _autoWalkTarget;
-    private MonoBehaviour? _interactionHandlerComponent;
     private Gamepad? _dialogKeyboardVirtualGamepad;
     private float _dialogPendingInputUntilTime = -100f;
     private int _dialogPendingMoveSteps;

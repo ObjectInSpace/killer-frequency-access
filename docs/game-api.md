@@ -45,10 +45,14 @@ SCN_Menu 6).
   and **`Il2CppActions.ControllerActionManager`** (`hoveredPrimaryInteraction`, `cachedInteractions`,
   `currentScope`, `controllerInteractor`). These are the hooks for "what is the player pointing at".
   `PlayerInteractionHighlighter.Highlight` also takes the Radio types.
-- **Names:** nothing on screen names an item; the reticle is an icon. The only name is the
-  GameObject name (`P_HeroProp_Interactable_SaveClive_PoliceReport`, `Button_Play_FS`), plus
-  `InteractionBase.Name` / `Description` (unverified what they return). The mod needs a cleanup of
-  object names plus a hand-written table for the important ones.
+- **Names:** nothing on screen names an item; the reticle is an icon, and the rip's localization
+  tables are UI text only. The only names are the GameObject names
+  (`P_HeroProp_Interactable_SaveClive_PoliceReport`, `Button_Play_FS`). The mod speaks names from
+  `Generated\GameObjectNames.cs`, generated from the rip by `tools\rip\gen_names.py`.
+  `InteractionBase.Name` / `Description`: unverified what they return; the mod logs them.
+- **Player:** one `PlayerController` GameObject per scene carries the `CharacterController`, the
+  `ControllerBaseInteractor`, `ControllerActionManager`, `FlatScreenPlayer` and the Fs*Handler
+  components.
 
 **Unused: the `Il2Cpp.InteractableItem` system** described below. It is in Assembly-CSharp, but no
 scene or prefab in the rip contains `InteractableItem`, `RootScope`, `DeskChairScope` or any other
@@ -141,7 +145,7 @@ its `NavMeshSettings`: SCN_Main uses `NavMeshData\NavMesh_0.asset`, SCN_Intro an
 `NavMesh_1.asset`, SCN_Epilogue uses `NavMesh.asset`. Boot, Ident, Transition and Engagement have
 none. SCN_Main also has 25 `Room`s, 9 `RoomPortal`s, 17 `RoomPortalDoor`s and 59 `DoorOpenable`s.
 
-Scene tooling is in `C:\Users\amock\RipWork\kf_scene_tools` (`scene_parse.py` builds a pickle of a
+Scene tooling is in `tools\rip` (see its README; `scene_parse.py` builds a pickle of a
 scene, `q_interactables.py` lists interactables, `fileid.py` turns a DLL class name into the
 `m_Script` fileID used in the scene files, `guidmap.txt` maps script GUIDs to files).
 
