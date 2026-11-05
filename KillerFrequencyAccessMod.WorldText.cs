@@ -104,10 +104,22 @@ public sealed partial class KillerFrequencyAccessMod
         if (now >= _nextDiegeticRefreshTime)
         {
             _nextDiegeticRefreshTime = now + DiegeticRefreshSeconds;
+            // Include inactive displays: the inspect view's left/right displays
+            // (FsInspectDiegeticTextDetector.leftDisplay/rightDisplay) may only be active while showing, and
+            // FindObjectsOfType skipped them (user report 2026-11-05: magazine inner pages never read).
+            var count = _diegeticDisplays.Count;
             _diegeticDisplays.Clear();
-            foreach (var display in UnityEngine.Object.FindObjectsOfType<Il2Cpp.DiegeticTextDisplay>())
+            foreach (var display in Resources.FindObjectsOfTypeAll<Il2Cpp.DiegeticTextDisplay>())
             {
-                _diegeticDisplays.Add(display);
+                if (display != null && display.gameObject.scene.IsValid())
+                {
+                    _diegeticDisplays.Add(display);
+                }
+            }
+
+            if (_diegeticDisplays.Count != count)
+            {
+                LoggerInstance.Msg($"[worldtext] {_diegeticDisplays.Count} diegetic text displays: {string.Join(", ", _diegeticDisplays.ConvertAll(d => d.name))}");
             }
         }
 
@@ -118,10 +130,56 @@ public sealed partial class KillerFrequencyAccessMod
                 continue;
             }
 
-            var shown = display._state == Il2Cpp.DiegeticTextDisplay.State.FullyShown;
+            var shown = display._state == Il2Cpp.DiegeticTextDisplay.State.FullyShown && display.gameObject.activeInHierarchy;
             var text = shown && display._textComponent != null ? NormalizeText(display._textComponent.text) : string.Empty;
-            SpeakWorldTextIfChanged($"diegetic|{display.GetInstanceID()}", text);
+            if (SpeakWorldTextIfChanged($"diegetic|{display.GetInstanceID()}", text) && text.Length > 0)
+            {
+                LoggerInstance.Msg($"[worldtext] read from display {display.name}");
+            }
         }
+
+        LogInspectedPages();
+    }
+
+    private Il2Cpp.FsInspectDiegeticTextDetector? _inspectDetector;
+    private int _lastInspectedPageCount = -1;
+
+    /// <summary>Logs how many text pages the inspected item has and which one the game observes, on change.</summary>
+    private void LogInspectedPages()
+    {
+        if (_inspectDetector == null)
+        {
+            foreach (var detector in Resources.FindObjectsOfTypeAll<Il2Cpp.FsInspectDiegeticTextDetector>())
+            {
+                if (detector != null && detector.gameObject.scene.IsValid())
+                {
+                    _inspectDetector = detector;
+                    break;
+                }
+            }
+
+            if (_inspectDetector == null)
+            {
+                return;
+            }
+        }
+
+        var pages = _inspectDetector.inspectedLocalizers;
+        var count = pages?.Count ?? 0;
+        if (count == _lastInspectedPageCount)
+        {
+            return;
+        }
+
+        _lastInspectedPageCount = count;
+        var names = new List<string>();
+        for (var i = 0; i < count; i++)
+        {
+            var page = pages![i];
+            names.Add(page?.localizer != null ? $"{page.localizer.name} (right display={page.useRightDisplay})" : "(none)");
+        }
+
+        LoggerInstance.Msg($"[worldtext] inspected item has {count} text page(s): {string.Join(", ", names)}");
     }
 
     private static string VisibleText(TMP_Text? text)
@@ -129,12 +187,13 @@ public sealed partial class KillerFrequencyAccessMod
         return text != null && IsVisible(text) ? NormalizeText(text.text) : string.Empty;
     }
 
-    private void SpeakWorldTextIfChanged(string key, string text)
+    /// <summary>Speaks the text if it changed since last time for this key. Returns whether it changed.</summary>
+    private bool SpeakWorldTextIfChanged(string key, string text)
     {
         _lastWorldText.TryGetValue(key, out var last);
         if (text == (last ?? string.Empty))
         {
-            return;
+            return false;
         }
 
         _lastWorldText[key] = text;
@@ -142,5 +201,7 @@ public sealed partial class KillerFrequencyAccessMod
         {
             SpeakSelectionText(text);
         }
+
+        return true;
     }
 }
