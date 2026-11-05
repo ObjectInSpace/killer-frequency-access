@@ -542,9 +542,9 @@ public sealed partial class KillerFrequencyAccessMod
             }
         }
 
-        // Entries: every active interactable the game allows outside VR, under its outermost container.
-        // No positions are read here. OculusOnly marks the 98 VR grab handles (rip), which flat-screen
-        // play cannot use.
+        // Entries: every active interactable with an action the game says is available now, under its
+        // outermost container. No count cap and no distance limit; no positions are read here. OculusOnly
+        // marks the 98 VR grab handles (rip), which flat-screen play cannot use.
         _entriesById.Clear();
         _entriesMemo = null;
         _itemsMemo = null;
@@ -552,7 +552,8 @@ public sealed partial class KillerFrequencyAccessMod
         var items = new List<Transform>();
         foreach (var interactable in UnityEngine.Object.FindObjectsOfType<GameInteractableBase>())
         {
-            if (interactable == null || !interactable.isActiveAndEnabled || interactable.OculusOnly)
+            if (interactable == null || !interactable.isActiveAndEnabled || interactable.OculusOnly
+                || GetAvailableVerbs(interactable).Count == 0)
             {
                 continue;
             }
