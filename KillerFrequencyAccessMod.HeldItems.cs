@@ -385,8 +385,24 @@ public sealed partial class KillerFrequencyAccessMod
 
         MelonLoader.MelonLogger.Msg($"[held] {text}");
         var places = FindPlacesForHeldItem();
-        // Still needed for "Fits ..." when pointing at a place and for the range tone; not spoken on pick-up.
         _placesForHeldIds = new HashSet<int>(places.ConvertAll(t => t.GetInstanceID()));
+        if (places.Count > 0)
+        {
+            var names = places.ConvertAll(t => GetSpokenName(t));
+            text += places.Count <= 3
+                ? $". Fits {string.Join(", ", names)}"
+                : $". Fits {places.Count} places";
+            text += $". To put it in, aim at it and {DescribePlaceKeys()}";
+        }
+
+        // Every action the game says the held item can do now (CanPerform), with its keys, as for pointed-at objects.
+        var held = primary ?? secondary;
+        var actions = held == null ? new List<string>() : GetPerformableVerbs(held);
+        if (actions.Count > 0)
+        {
+            text += $". {string.Join(". ", actions)}";
+        }
+
         SpeakSelectionText(text);
     }
 
