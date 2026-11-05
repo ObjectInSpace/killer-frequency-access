@@ -53,11 +53,65 @@ public sealed partial class KillerFrequencyAccessMod
             _dialogArrowsActive = wantActive;
             var touched = ApplyDialogArrowState(wantActive);
             LoggerInstance.Msg($"[dialogkeys] arrows {(wantActive ? "drive dialogue choices" : "walk")}; {touched} binding(s) changed");
+            if (wantActive)
+            {
+                HighlightAnswerIfNoneSelected(ui!);
+            }
         }
         catch (Exception ex)
         {
             LogOnce($"dialogkeys-error|{ex.GetType().Name}|{ex.Message}", $"[dialogkeys] error: {ex}");
         }
+    }
+
+    /// <summary>
+    /// Navigation only moves an existing selection. User report 2026-11-05: arrows did nothing until one
+    /// d-pad press, then worked. So when the answers come into range with no answer selected, select the
+    /// one the game holds (WorldUIManager._cachedDialogChoice), else the first active answer.
+    /// </summary>
+    private void HighlightAnswerIfNoneSelected(Il2CppServices.WorldUIManager ui)
+    {
+        var eventSystem = UnityEngine.EventSystems.EventSystem.current;
+        if (eventSystem == null)
+        {
+            LoggerInstance.Msg("[dialogkeys] no EventSystem; answer not highlighted");
+            return;
+        }
+
+        var selected = eventSystem.currentSelectedGameObject;
+        if (selected != null && selected.activeInHierarchy && IsDialogueAnswer(ui, selected.transform))
+        {
+            LoggerInstance.Msg($"[dialogkeys] answer already selected: {selected.name}");
+            return;
+        }
+
+        GameObject? target = null;
+        var cached = ui._cachedDialogChoice;
+        if (cached != null && cached.gameObject.activeInHierarchy && IsDialogueAnswer(ui, cached.transform))
+        {
+            target = cached.gameObject;
+        }
+        else
+        {
+            var root = ui.answerRoot;
+            for (var i = 0; i < root.childCount && target == null; i++)
+            {
+                var child = root.GetChild(i);
+                if (child.gameObject.activeInHierarchy)
+                {
+                    target = child.GetComponentInChildren<UnityEngine.UI.Selectable>()?.gameObject;
+                }
+            }
+        }
+
+        if (target == null)
+        {
+            LoggerInstance.Msg("[dialogkeys] no selectable answer found to highlight");
+            return;
+        }
+
+        LoggerInstance.Msg($"[dialogkeys] selection was {(selected == null ? "none" : selected.name)}; selecting answer {target.name}");
+        eventSystem.SetSelectedGameObject(target);
     }
 
     private int CountActiveAnswers()
