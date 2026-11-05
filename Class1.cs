@@ -25,49 +25,21 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private const float TargetListFreshnessSeconds = 1.25f;
     private const int MaxWalkableTargetsPerRefresh = 14;
     private const int MaxPathValidationAttemptsPerRefresh = 24;
-    private const float CurrentRoomScanRadiusMeters = 24.0f;
     private const float CurrentRoomMaxVerticalDeltaMeters = 5.5f;
     private const int MaxCurrentRoomTargetCandidates = 40;
     private const float AutoWalkSpeed = 3.3f;
     private const float AutoTurnDegreesPerSecond = 300f;
     private const float InteractionHorizontalToleranceDegrees = 15f;
     private const float InteractionVerticalToleranceDegrees = 12f;
-    private const float EnvironmentScanDistance = 20f;
-    private const float EnvironmentScanUpdateIntervalSeconds = 0.08f;
-    private const float EnvironmentScanCueGraceSeconds = 0.2f;
-    private const float EnvironmentScanCueFadeSeconds = 0.12f;
-    private const float PathStallSuppressSeconds = 0.18f;
-    private const float PathStallSpeedThreshold = 0.12f;
-    private const float PathStallGuideOverrideAngleDegrees = 22f;
-    private const float PathGuidanceWaypointReachedDistance = 0.55f;
-    private const float PathGuidanceHighToneDistance = 1.0f;
-    private const float PathGuidanceMediumToneDistance = 2.1f;
-    private const float PathGuidanceWaypointDriftDistance = 0.35f;
-    private const float PathGuidanceStallDistanceEpsilon = 0.08f;
-    private const int PathGuidanceMaxStalledUpdates = 10;
-    private const int MaxRadialPathEvaluationsPerTick = 8;
     private const float TargetComponentCacheRefreshGameplaySeconds = 2.0f;
     private const float TargetComponentCacheRefreshStudioSeconds = 4.0f;
     private const float TargetRefreshWarnThresholdMs = 12f;
     private const float PerfWarnCooldownSeconds = 5f;
-    private const int WallToneFrequency = 250;
-    private const int DoorToneFrequency = 500;
-    private const int ObjectToneFrequency = 760;
-    private const uint SoundFlagAsync = 0x0001;
-    private const uint SoundFlagMemory = 0x0004;
-    private const uint SoundFlagNoDefault = 0x0002;
-    private static readonly Dictionary<string, string> ScanSummaryLabelOverrides = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly List<ReachableTarget> _reachableTargets = new();
-    private readonly Dictionary<int, ActiveScanCue> _activeEnvironmentScanCues = new();
     private readonly Dictionary<int, float> _temporarilyUnreachableTargetUntil = new();
     private readonly List<MonoBehaviour> _cachedNavigationComponents = new();
     private readonly Collider[] _nearbyInteractionColliderBuffer = new Collider[768];
-    private GCHandle _continuousScanFieldBufferHandle;
-    private AudioClip? _environmentScanLoopedToneClip;
-    private AudioSource? _environmentScanTemplateSource;
-    private GameObject? _environmentScanCueRoot;
-    private float _nextEnvironmentScanUpdateTime = -100f;
     private float _nextNavigationComponentCacheRefreshTime = -100f;
     private float _nextTargetBackgroundRefreshTime = -100f;
     private float _lastTargetRefreshRequestTime = -100f;
@@ -76,20 +48,11 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private float _lastNavigationInteractionTime = -100f;
     private float _nextTargetRefreshWarnTime = -100f;
     private bool _isAutoWalking;
-    private bool _isEnvironmentScanEnabled;
-    private bool _hasPathGuidanceWaypoint;
-    private int _pathGuidanceStalledUpdates;
     private int _selectedTargetIndex = -1;
     private int _lastObservedInteractableObjectId = -1;
     private string _lastSelectionSpeechKey = string.Empty;
     private float _lastSelectionSpeechTime = -100f;
     private float _lastObservedInteractableSpeakTime = -100f;
-    private float _pathGuidanceLastDistance = -1f;
-    private float _pathStallElapsed;
-    private float _pathStallLastSampleTime = -100f;
-    private bool _hasPathStallSample;
-    private Vector3 _pathStallLastPosition;
-    private Vector3 _pathGuidanceWaypoint;
     private int _targetRefreshPassCount;
     private float _targetRefreshTotalMilliseconds;
     private Transform? _autoWalkTarget;
@@ -109,6 +72,7 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
         UpdateHeldItemAnnouncement();
         LogPerformingInteractions();
         UpdateDialogArrows();
+        UpdateRangeCue();
         // World text first, so a conversation's question is spoken before its first answer.
         UpdateWorldText();
         UpdateMenuSpeech();
@@ -116,49 +80,8 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
 
     public override void OnApplicationQuit()
     {
-        StopContinuousEnvironmentScan(true);
-        DisposeEnvironmentScanToneSources();
         SpeechRouter.Shutdown();
     }
-
-    private enum ScanCueType
-    {
-        Wall = 1,
-        Door = 2,
-        Object = 3
-    }
-
-    private readonly struct ActiveScanCue
-    {
-        public ActiveScanCue(
-            int cueId,
-            ScanCueType cueType,
-            AudioSource source,
-            Vector3 position,
-            float distanceMeters,
-            float sizeMeters,
-            float lastSeenTime)
-        {
-            CueId = cueId;
-            CueType = cueType;
-            Source = source;
-            Position = position;
-            DistanceMeters = distanceMeters;
-            SizeMeters = sizeMeters;
-            LastSeenTime = lastSeenTime;
-        }
-
-        public int CueId { get; }
-        public ScanCueType CueType { get; }
-        public AudioSource Source { get; }
-        public Vector3 Position { get; }
-        public float DistanceMeters { get; }
-        public float SizeMeters { get; }
-        public float LastSeenTime { get; }
-    }
-
-    [DllImport("winmm.dll", SetLastError = true)]
-    private static extern bool PlaySound(IntPtr pszSound, IntPtr hmod, uint fdwSound);
 
     private void RecordTargetRefreshMetrics(double elapsedMs)
     {

@@ -2,7 +2,8 @@
 
 ### What this does:
 - Enables TTS and screenreader access to game text.
-- Implements a pathfinding mechanic: pressing \ should enable a sound that plays corresponding with an open path. It increases in pitch once you move toward the current waypoint.
+- Plays a rising tone when an object or a conversation's answers come into range, so you can use them, and a falling tone when they go out of range.
+- Arrow keys move through conversation answers while they are on screen. WASD still walks.
 - Computes a list of interactable objects. Press [ and ] to choose an object, and the backspace key to walk to it automatically. You should then hear the object name to indicate you are close enough to use it.
 
 Note that the mod is incomplete and as of yet does not work. In particular, the objects in the studio are not being included in the list of scannable objects.

@@ -61,8 +61,9 @@ Names: parts of a device are named after it (`tools\rip\gen_names.py`, `DEVICES`
 or slider below `VinylPlayer` is "record player ..." ("record player vinyl slot"), likewise cassette
 player, dictaphone, soundboard, fuse box, keypad, handheld radio, computer, lever.
 
-Still old code, not yet rebuilt: the environment scan tones (raycast open-path probing, to be
-replaced by step 8) and NavMesh waypoint search in auto-walk.
+Still old code, not yet rebuilt: NavMesh waypoint search in auto-walk. The environment scan
+(the \ key, raycast open-path tones) was removed on 2026-11-04 at the user's request: it never worked and
+wasn't useful. Unity audio is disabled in this game (`m_DisableAudio: 1`), so mod sounds go through winmm.
 
 ## Findings (2026-11-04)
 
@@ -149,6 +150,11 @@ Commit straight to master; no branches while the mod is unreleased.
   before its first button. World text comes from `WorldUIManager` subtitle, choice prompt, item info and
   settings toast boxes, plus `DiegeticTextDisplay` panels when `FullyShown`. Answers say "n of m".
   `[menu]` logs top-menu changes, a cached-choice focus fallback, and controls without a label.
+  Installed, not yet run.
+- 2026-11-04, range cue build (`KillerFrequencyAccessMod.RangeCue.cs`): rising tone when the game starts
+  observing an interactable (out after 0.5 s with none) or when `WorldUIManager.IsChoicesUiInRange()`
+  turns true while answers are up, and a falling tone when either ends. Tones go through winmm
+  `PlaySound` from memory. `[range]` logs the choice transitions. The \ environment scan was removed.
   Installed, not yet run.
 
 Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
