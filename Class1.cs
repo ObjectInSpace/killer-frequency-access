@@ -63,7 +63,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private const float TargetRefreshWarnThresholdMs = 12f;
     private const float PerfSummaryIntervalSeconds = 10f;
     private const float PerfWarnCooldownSeconds = 5f;
-    private const float DialogInputBufferWindowSeconds = 0.45f;
     private const int WallToneFrequency = 250;
     private const int DoorToneFrequency = 500;
     private const int ObjectToneFrequency = 760;
@@ -99,7 +98,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private float _nextPerfSummaryTime = -100f;
     private float _nextUiScanWarnTime = -100f;
     private float _nextTargetRefreshWarnTime = -100f;
-    private float _nextDialogKeyboardBridgeWarmupTime = -100f;
     private bool _hasLastSelectionContext;
     private bool _isAutoWalking;
     private bool _isEnvironmentScanEnabled;
@@ -133,11 +131,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private float _targetRefreshTotalMilliseconds;
     private int _findObjectsEnumerationCount;
     private Transform? _autoWalkTarget;
-    private Gamepad? _dialogKeyboardVirtualGamepad;
-    private float _dialogPendingInputUntilTime = -100f;
-    private int _dialogPendingMoveSteps;
-    private bool _dialogPendingSubmit;
-    private int _dialogPendingOptionNumber;
 
     public override void OnInitializeMelon()
     {
@@ -148,7 +141,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     public override void OnUpdate()
     {
         UpdateSceneLoadState();
-        EnsureDialogKeyboardBridgeReady();
 
         if (IsVerticalNavigationPressed())
         {
@@ -160,7 +152,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
             _submitPending = true;
         }
 
-        HandleDialogKeyboardChoiceInput();
         HandleObjectNavigationHotkeys();
         UpdateAutoWalk(Time.unscaledDeltaTime);
         UpdateObservedInteractableAnnouncement();
@@ -207,7 +198,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     {
         StopContinuousEnvironmentScan(true);
         DisposeEnvironmentScanToneSources();
-        ReleaseDialogKeyboardVirtualGamepad();
         SpeechRouter.Shutdown();
     }
 

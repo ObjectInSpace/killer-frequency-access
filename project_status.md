@@ -118,7 +118,17 @@ Commit straight to master; no branches while the mod is unreleased.
   record player buttons never finished: the game reported the button observed with `UseInteraction=yes`
   while the mod's reach check still said no, and the camera writes were overwritten by the game's look
   update. Keys were spoken for keyboard and mouse while the user played on a controller.
-- 2026-11-04, auto-walk/controller build: installed, not yet run.
+- 2026-11-04, auto-walk/controller build: controller keys good; auto-walk worse
+  (`FlatScreenPlayer._cameraHandler` null, view never turned). Fixed: CameraHandler from the player's
+  children; aim measured from the real camera.
+- 2026-11-04, standing-spot build: better, still stuck on phone line buttons (0 usable spots) and some
+  record player spots ("aimed, game observes nothing"). Cause: eye height measured from the player
+  transform (0.90 m, mid-body) instead of the feet; fixed with `PlayerBase.GetFootLocation`.
+  Conversation input was erratic (d-pad and arrows working only sometimes): the mod had a "dialog
+  keyboard bridge" that added a virtual gamepad, injected d-pad/A taps and UI move/submit events on
+  arrow keys, Enter and 1-8 / numpad 1-8, on top of the game's own UI Navigate/Submit bindings
+  (arrows, WASD, d-pad, sticks, Enter). Removed entirely; the mod now only reads keys, never injects.
+- 2026-11-04, eye-height/no-injection build: installed, not yet run.
 
 Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
 `NavMesh.CalculatePath` is unusable; the route is an A* over a 0.5 m lattice of

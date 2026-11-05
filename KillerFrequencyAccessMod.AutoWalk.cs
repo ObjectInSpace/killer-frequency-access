@@ -289,7 +289,23 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
-        var eyeHeight = camera.transform.position.y - origin.position.y;
+        // Spots are NavMesh (floor) points, so eye height is measured from the game's foot location
+        // (PlayerBase.GetFootLocation). The player transform is not at the feet: measuring from it gave
+        // 0.90 m in the standing-spot run, rays at desk height, and 0 spots for the phone line buttons.
+        var feet = origin.position;
+        // FlatScreenPlayer is on the same PlayerController GameObject as the interactor (rip).
+        var player = origin.GetComponent<Il2Cpp.FlatScreenPlayer>() ?? Il2Cpp.FlatScreenPlayer.instance;
+        if (player != null)
+        {
+            feet = player.GetFootLocation();
+        }
+        else if (NavMesh.SamplePosition(origin.position, out var footHit, NavMeshSampleMeters, NavMesh.AllAreas))
+        {
+            feet = footHit.position;
+            LogOnce("walk-no-player-feet", "[walk] FlatScreenPlayer.instance is null; feet taken from the NavMesh under the player");
+        }
+
+        var eyeHeight = camera.transform.position.y - feet.y;
         var aim = ResolveInteractionAimPoint(target);
         var reach = interactable.fsMaxReachDistance;
         int mask = Il2Cpp.ControllerBaseInteractor.raycastLayerMask.value;
