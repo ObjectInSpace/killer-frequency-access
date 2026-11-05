@@ -136,10 +136,10 @@ Commit straight to master; no branches while the mod is unreleased.
   both bind `Gameplay/Move`; the user's `BindingOverrides` is empty. The Debug map (numpad 0-9 events,
   F5/F9, number row 1-3 Test, right Ctrl / d-pad down SkipDialogue, F4 free cam) has no
   DebugManager or DebugMenu placed in any scene or prefab, test scenes included.
-- 2026-11-04, input-diagnostics build (`KillerFrequencyAccessMod.InputDiagnostics.cs`, read-only):
-  `[inputdiag]` logs `Debug.isDebugBuild`, every enabled map/action on change with runtime bindings
-  for Debug, Navigate, Navigate_InGame, Submit and Move, dialogue active/choice key changes, and
-  whether the player moves 0.3 m or more while a choice is up. Installed, not yet run.
+- 2026-11-04, dialog-arrows build (`KillerFrequencyAccessMod.DialogArrows.cs`): while
+  `WorldUIManager.answerRoot` has active answers, arrows are bound to `UI/Navigate_InGame` and taken
+  off `Gameplay/Move`/`MoveRaw`; reversed when answers close. The user settled that debug mode is off
+  (numpad keys are game actions) and that walking works during choices. Installed, not yet run.
 
 Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
 `NavMesh.CalculatePath` is unusable; the route is an A* over a 0.5 m lattice of

@@ -14,11 +14,9 @@ namespace Killer_Frequency_Access;
 // So while WorldUIManager.answerRoot has active answers, this gives the game's own Navigate_InGame
 // action an arrow-key composite and switches the arrow parts of Move/MoveRaw off with an empty
 // binding override; when the answers go away it reverses both. WASD always walks. Nothing is injected:
-// the game reads its own actions as usual. Overrides are re-checked on every asset found, so an
-// override that was ever saved into the game's settings is cleared outside dialogue.
+// the game reads its own actions as usual.
 public sealed partial class KillerFrequencyAccessMod
 {
-    private const float DialogArrowsAssetRescanSeconds = 5.0f;
     private const string NavigateInGamePath = "UI/Navigate_InGame";
     private static readonly string[] MoveActionPaths = { "Gameplay/Move", "Gameplay/MoveRaw" };
     private static readonly (string Part, string Path)[] ArrowParts =
@@ -31,9 +29,7 @@ public sealed partial class KillerFrequencyAccessMod
 
     private Il2CppServices.WorldUIManager? _dialogWorldUi;
     private bool _dialogArrowsActive;
-    private bool _dialogArrowsApplied;
     private int _lastAnswerCount = -1;
-    private float _nextDialogArrowsRescan;
 
     private void UpdateDialogArrows()
     {
@@ -47,21 +43,14 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var wantActive = answers > 0;
-            var now = Time.unscaledTime;
-            if (_dialogArrowsApplied && wantActive == _dialogArrowsActive && now < _nextDialogArrowsRescan)
+            if (wantActive == _dialogArrowsActive)
             {
                 return;
             }
 
-            _nextDialogArrowsRescan = now + DialogArrowsAssetRescanSeconds;
-            var changed = !_dialogArrowsApplied || wantActive != _dialogArrowsActive;
             _dialogArrowsActive = wantActive;
-            _dialogArrowsApplied = true;
             var touched = ApplyDialogArrowState(wantActive);
-            if (changed || touched > 0)
-            {
-                LoggerInstance.Msg($"[dialogkeys] arrows {(wantActive ? "drive dialogue choices" : "walk")}; {touched} binding(s) changed");
-            }
+            LoggerInstance.Msg($"[dialogkeys] arrows {(wantActive ? "drive dialogue choices" : "walk")}; {touched} binding(s) changed");
         }
         catch (Exception ex)
         {
