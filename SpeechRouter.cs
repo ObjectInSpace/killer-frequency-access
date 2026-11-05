@@ -1,36 +1,102 @@
 using System;
-using System.Reflection;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using MelonLoader;
-using UnityEngine;
 
 namespace Killer_Frequency_Access;
 
+/// <summary>
+/// Speech and braille through Prism (github.com/ethindp/prism, MPL-2.0, v0.18.3 in native\), which drives
+/// NVDA, JAWS, ZDSR, PC-Talker, ZoomText, System Access and Narrator, and falls back to the OS voice
+/// (SAPI/OneCore) when no screen reader runs. Ported from Before The Storm Access (PrismSpeech.cs),
+/// Windows path only: Killer Frequency ships on Windows.
+///
+/// prism.dll sits next to the mod DLL in Mods\ and is loaded by absolute path, with every export bound
+/// through a function pointer. Output never interrupts: lines queue in the order the mod speaks them.
+/// </summary>
 internal static class SpeechRouter
 {
-    private enum SpeechBackend
-    {
-        None,
-        Nvda,
-        Jaws,
-        Sapi
-    }
+    private const int PrismOk = 0;
+    private const int PrismErrorNotImplemented = 3;
+    private const int PrismErrorAlreadyInitialized = 15;
+    private const ulong FeatureSupportedAtRuntime = 1UL << 0;
 
-    private const float DetectionRefreshSeconds = 2f;
+    // Plain TTS backends: while one is active, keep checking for a screen reader that starts later.
+    private const ulong BackendSapi = 0x1D6DF72422CEEE66;
+    private const ulong BackendOneCore = 0x6797D32F0D994CB4;
+    private const int ScreenReaderProbeIntervalMs = 5000;
 
-    private static readonly NvdaClient Nvda = new();
-    private static readonly JawsClient Jaws = new();
-    private static readonly SapiClient Sapi = new();
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr InitFn(IntPtr config);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void ContextFn(IntPtr ctx);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr CreateBestFn(IntPtr ctx);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate UIntPtr RegistryCountFn(IntPtr ctx);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate ulong RegistryIdAtFn(IntPtr ctx, UIntPtr index);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate ulong RegistryIdFn(IntPtr ctx, byte[] utf8Name);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int RegistryPriorityFn(IntPtr ctx, ulong id);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr RegistryCreateFn(IntPtr ctx, ulong id);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr BackendNameFn(IntPtr backend);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate ulong BackendFeaturesFn(IntPtr backend);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int BackendCallFn(IntPtr backend);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int BackendOutputFn(IntPtr backend, byte[] utf8Text, [MarshalAs(UnmanagedType.I1)] bool interrupt);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void BackendFreeFn(IntPtr backend);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr ErrorStringFn(int error);
+
+    [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadLibraryW(string path);
+
+    [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true)]
+    private static extern IntPtr GetProcAddress(IntPtr module, string name);
 
     private static MelonLogger.Instance? _logger;
-    private static SpeechBackend _activeBackend = SpeechBackend.None;
-    private static float _lastDetectAt = -1000f;
+    private static IntPtr _library;
+    private static InitFn? _init;
+    private static ContextFn? _shutdown;
+    private static CreateBestFn? _createBest;
+    private static RegistryCountFn? _registryCount;
+    private static RegistryIdAtFn? _registryIdAt;
+    private static RegistryIdFn? _registryId;
+    private static RegistryPriorityFn? _registryPriority;
+    private static RegistryCreateFn? _registryCreate;
+    private static BackendNameFn? _backendName;
+    private static BackendFeaturesFn? _backendFeatures;
+    private static BackendCallFn? _backendInitialize;
+    private static BackendOutputFn? _backendOutput;
+    private static BackendFreeFn? _backendFree;
+    private static ErrorStringFn? _errorString;
+
+    private static IntPtr _context;
+    private static IntPtr _backend;
+    private static ulong _backendId;
+    private static int _backendPriority;
+    private static int _lastProbeTick;
+    private static bool _loggedOutputError;
+    private static string _backendNameText = string.Empty;
 
     public static void Initialize(MelonLogger.Instance logger)
     {
         _logger = logger;
-        RefreshBackend(true);
-        logger.Msg($"Speech backend: {_activeBackend}");
+        try
+        {
+            if (!LoadLibrary())
+            {
+                return;
+            }
+
+            _context = _init!(IntPtr.Zero);
+            if (_context == IntPtr.Zero)
+            {
+                logger.Error("Prism: prism_init failed; speech is disabled.");
+                return;
+            }
+
+            SelectBest();
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Prism: initialization failed: {ex}");
+        }
     }
 
     public static void Speak(string text)
@@ -42,287 +108,220 @@ internal static class SpeechRouter
 
         // Every spoken line goes to the log, so a test run shows exactly what the player heard.
         _logger?.Msg($"[speech] {text}");
-        RefreshBackend(false);
-        if (TrySpeakWithActiveBackend(text))
+        if (_context == IntPtr.Zero)
         {
             return;
         }
 
-        if (Sapi.IsAvailable && Sapi.Speak(text))
+        try
         {
-            _activeBackend = SpeechBackend.Sapi;
-            return;
+            ProbeForScreenReader();
+            if (_backend == IntPtr.Zero && !SelectBest())
+            {
+                return;
+            }
+
+            var utf8 = ToUtf8(text);
+            var result = _backendOutput!(_backend, utf8, false);
+            if (result == PrismOk)
+            {
+                _loggedOutputError = false;
+                return;
+            }
+
+            if (!_loggedOutputError)
+            {
+                _loggedOutputError = true;
+                _logger?.Warning($"Prism: {_backendNameText} output failed ({ErrorText(result)}); re-selecting backend.");
+            }
+
+            if (SelectBest())
+            {
+                _backendOutput(_backend, utf8, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"Prism: output threw: {ex.Message}");
         }
     }
 
     public static void Shutdown()
     {
-        Jaws.Dispose();
-        Sapi.Dispose();
-    }
-
-    private static bool TrySpeakWithActiveBackend(string text)
-    {
-        switch (_activeBackend)
+        try
         {
-            case SpeechBackend.Nvda:
-                return Nvda.Speak(text);
-            case SpeechBackend.Jaws:
-                return Jaws.Speak(text);
-            case SpeechBackend.Sapi:
-                return Sapi.Speak(text);
-            default:
-                return false;
+            FreeBackend();
+            if (_context != IntPtr.Zero)
+            {
+                _shutdown!(_context);
+                _context = IntPtr.Zero;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"Prism: shutdown failed: {ex.Message}");
         }
     }
 
-    private static void RefreshBackend(bool force)
+    private static bool LoadLibrary()
     {
-        var now = Time.unscaledTime;
-        if (!force && now - _lastDetectAt < DetectionRefreshSeconds)
+        var directory = Path.GetDirectoryName(typeof(SpeechRouter).Assembly.Location) ?? string.Empty;
+        var path = Path.Combine(directory, "prism.dll");
+        if (!File.Exists(path))
+        {
+            _logger?.Error($"Prism: {path} is missing; speech is disabled.");
+            return false;
+        }
+
+        _library = LoadLibraryW(path);
+        if (_library == IntPtr.Zero)
+        {
+            _logger?.Error($"Prism: could not load {path} (Windows error {Marshal.GetLastWin32Error()}).");
+            return false;
+        }
+
+        _init = Bind<InitFn>("prism_init");
+        _shutdown = Bind<ContextFn>("prism_shutdown");
+        _createBest = Bind<CreateBestFn>("prism_registry_create_best");
+        _registryCount = Bind<RegistryCountFn>("prism_registry_count");
+        _registryIdAt = Bind<RegistryIdAtFn>("prism_registry_id_at");
+        _registryId = Bind<RegistryIdFn>("prism_registry_id");
+        _registryPriority = Bind<RegistryPriorityFn>("prism_registry_priority");
+        _registryCreate = Bind<RegistryCreateFn>("prism_registry_create");
+        _backendName = Bind<BackendNameFn>("prism_backend_name");
+        _backendFeatures = Bind<BackendFeaturesFn>("prism_backend_get_features");
+        _backendInitialize = Bind<BackendCallFn>("prism_backend_initialize");
+        _backendOutput = Bind<BackendOutputFn>("prism_backend_output");
+        _backendFree = Bind<BackendFreeFn>("prism_backend_free");
+        _errorString = Bind<ErrorStringFn>("prism_error_string");
+
+        _logger?.Msg($"Prism: loaded {path}");
+        return true;
+    }
+
+    private static T Bind<T>(string export) where T : Delegate
+    {
+        var symbol = GetProcAddress(_library, export);
+        if (symbol == IntPtr.Zero)
+        {
+            throw new EntryPointNotFoundException($"Prism export not found: {export}");
+        }
+
+        return Marshal.GetDelegateForFunctionPointer<T>(symbol);
+    }
+
+    /// <summary>Replaces the active backend with the highest-priority one that initializes.</summary>
+    private static bool SelectBest()
+    {
+        FreeBackend();
+        var backend = _createBest!(_context);
+        if (backend == IntPtr.Zero)
+        {
+            _logger?.Warning("Prism: no speech backend available (no screen reader and no OS voice).");
+            return false;
+        }
+
+        Adopt(backend);
+        _logger?.Msg($"Speech backend: {_backendNameText}");
+        return true;
+    }
+
+    /// <summary>On a plain TTS backend, retries the screen readers every few seconds so one started later takes over.</summary>
+    private static void ProbeForScreenReader()
+    {
+        if (_backend == IntPtr.Zero || (_backendId != BackendSapi && _backendId != BackendOneCore))
         {
             return;
         }
 
-        _lastDetectAt = now;
-
-        var previous = _activeBackend;
-
-        if (Nvda.IsRunning())
-        {
-            _activeBackend = SpeechBackend.Nvda;
-        }
-        else if (Jaws.IsRunning())
-        {
-            _activeBackend = SpeechBackend.Jaws;
-        }
-        else if (Sapi.IsAvailable)
-        {
-            _activeBackend = SpeechBackend.Sapi;
-        }
-        else
-        {
-            _activeBackend = SpeechBackend.None;
-        }
-
-        if (previous != _activeBackend)
-        {
-            _logger?.Msg($"Speech backend switched: {_activeBackend}");
-        }
-    }
-}
-
-internal sealed class NvdaClient
-{
-    public bool IsRunning()
-    {
-        try
-        {
-            return nvdaController_testIfRunning() == 0;
-        }
-        catch (DllNotFoundException)
-        {
-            return false;
-        }
-        catch (EntryPointNotFoundException)
-        {
-            return false;
-        }
-    }
-
-    public bool Speak(string text)
-    {
-        try
-        {
-            return nvdaController_speakText(text) == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    [DllImport("nvdaControllerClient64.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-    private static extern int nvdaController_speakText([MarshalAs(UnmanagedType.LPWStr)] string text);
-
-    [DllImport("nvdaControllerClient64.dll", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int nvdaController_testIfRunning();
-}
-
-internal sealed class JawsClient
-{
-    [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
-    private delegate bool JawsSayStringDelegate([MarshalAs(UnmanagedType.LPWStr)] string text, [MarshalAs(UnmanagedType.Bool)] bool interrupt);
-
-    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-    private delegate bool JawsIsRunningDelegate();
-
-    private IntPtr _libraryHandle = IntPtr.Zero;
-    private JawsSayStringDelegate? _say;
-    private JawsIsRunningDelegate? _isRunning;
-    private bool _loadAttempted;
-
-    public bool IsRunning()
-    {
-        if (!EnsureLoaded())
-        {
-            return false;
-        }
-
-        if (_isRunning != null)
-        {
-            try
-            {
-                return _isRunning();
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        return FindWindow("JFWUI2", null) != IntPtr.Zero;
-    }
-
-    public bool Speak(string text)
-    {
-        if (!EnsureLoaded() || _say == null)
-        {
-            return false;
-        }
-
-        try
-        {
-            return _say(text, true);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public void Dispose()
-    {
-        if (_libraryHandle == IntPtr.Zero)
+        var now = Environment.TickCount;
+        if (unchecked(now - _lastProbeTick) < ScreenReaderProbeIntervalMs)
         {
             return;
         }
 
-        FreeLibrary(_libraryHandle);
-        _libraryHandle = IntPtr.Zero;
-        _say = null;
-        _isRunning = null;
-    }
-
-    private bool EnsureLoaded()
-    {
-        if (_loadAttempted)
+        _lastProbeTick = now;
+        var count = (int)_registryCount!(_context).ToUInt32();
+        for (var i = 0; i < count; i++)
         {
-            return _libraryHandle != IntPtr.Zero && _say != null;
-        }
+            var id = _registryIdAt!(_context, new UIntPtr((uint)i));
+            if (_registryPriority!(_context, id) <= _backendPriority)
+            {
+                break; // the registry is sorted by descending priority
+            }
 
-        _loadAttempted = true;
-        _libraryHandle = LoadLibrary("jfwapi.dll");
-        if (_libraryHandle == IntPtr.Zero)
-        {
-            return false;
-        }
+            var candidate = _registryCreate!(_context, id);
+            if (candidate == IntPtr.Zero)
+            {
+                continue;
+            }
 
-        _say = TryGetFunction<JawsSayStringDelegate>("JFWSayString");
-        _isRunning = TryGetFunction<JawsIsRunningDelegate>("JFWIsRunning");
-        return _say != null;
-    }
+            if ((_backendFeatures!(candidate) & FeatureSupportedAtRuntime) == 0)
+            {
+                _backendFree!(candidate);
+                continue;
+            }
 
-    private T? TryGetFunction<T>(string functionName) where T : class
-    {
-        if (_libraryHandle == IntPtr.Zero)
-        {
-            return null;
-        }
+            var result = _backendInitialize!(candidate);
+            if (result != PrismOk && result != PrismErrorAlreadyInitialized)
+            {
+                _backendFree!(candidate);
+                continue;
+            }
 
-        var address = GetProcAddress(_libraryHandle, functionName);
-        if (address == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        return Marshal.GetDelegateForFunctionPointer(address, typeof(T)) as T;
-    }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr LoadLibrary(string lpFileName);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool FreeLibrary(IntPtr hModule);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
-}
-
-internal sealed class SapiClient
-{
-    private object? _voice;
-    private Type? _voiceType;
-
-    public bool IsAvailable => EnsureCreated();
-
-    public bool Speak(string text)
-    {
-        if (!EnsureCreated())
-        {
-            return false;
-        }
-
-        try
-        {
-            _voiceType!.InvokeMember("Speak", BindingFlags.InvokeMethod, null, _voice, new object[] { text, 3 });
-            return true;
-        }
-        catch
-        {
-            return false;
+            FreeBackend();
+            Adopt(candidate);
+            _logger?.Msg($"Speech backend switched: {_backendNameText}");
+            return;
         }
     }
 
-    public void Dispose()
+    private static void Adopt(IntPtr backend)
     {
-        if (_voice == null || !Marshal.IsComObject(_voice))
+        _backend = backend;
+        _backendNameText = Utf8At(_backendName!(backend));
+        _backendId = _registryId!(_context, ToUtf8(_backendNameText));
+        _backendPriority = _registryPriority!(_context, _backendId);
+        _lastProbeTick = Environment.TickCount;
+    }
+
+    private static void FreeBackend()
+    {
+        if (_backend == IntPtr.Zero)
         {
             return;
         }
 
-        Marshal.ReleaseComObject(_voice);
-        _voice = null;
-        _voiceType = null;
+        _backendFree!(_backend);
+        _backend = IntPtr.Zero;
+        _backendId = 0;
+        _backendNameText = string.Empty;
     }
 
-    private bool EnsureCreated()
+    private static string ErrorText(int error)
     {
-        if (_voice != null)
+        var text = Utf8At(_errorString!(error));
+        return text.Length > 0 ? text : $"error {error}";
+    }
+
+    private static byte[] ToUtf8(string text) => Encoding.UTF8.GetBytes(text + "\0");
+
+    /// <summary>Reads a null-terminated UTF-8 string owned by native code.</summary>
+    private static string Utf8At(IntPtr pointer)
+    {
+        if (pointer == IntPtr.Zero)
         {
-            return true;
+            return string.Empty;
         }
 
-        try
+        var length = 0;
+        while (Marshal.ReadByte(pointer, length) != 0)
         {
-            _voiceType = Type.GetTypeFromProgID("SAPI.SpVoice");
-            if (_voiceType == null)
-            {
-                return false;
-            }
+            length++;
+        }
 
-            _voice = Activator.CreateInstance(_voiceType);
-            return _voice != null;
-        }
-        catch
-        {
-            return false;
-        }
+        var bytes = new byte[length];
+        Marshal.Copy(pointer, bytes, 0, length);
+        return Encoding.UTF8.GetString(bytes);
     }
 }
-
-
