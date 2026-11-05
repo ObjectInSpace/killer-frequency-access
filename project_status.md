@@ -30,9 +30,12 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   its nearest `m_Colliders` entry.
 
 `KillerFrequencyAccessMod.ObjectList.cs` (object list, user design 2026-11-05, always on outside menus):
-- Home / End move between levels: rooms, then what stands on its own in the room (devices, drawers,
-  doors, docks, loose objects), then what is in or on that entry. Page Up / Page Down move along the
-  level; Backspace walks to the entry (a device's first part). O, Enter, `[` / `]` and categories are
+- A tree: rooms, then what stands on its own in the room (devices, drawers, doors, docks, loose
+  objects), then for every container at any depth its direct contents (an object's parent is its
+  nearest Interactable / Openable / device ancestor). End goes in, Home comes out, Page Up / Page Down
+  move along a level; Backspace walks to the entry (a device's first usable part). The list follows
+  the player: entering a room lists its objects, looking at an object selects it, looking at a
+  container lists its contents. O, Enter, `[` / `]` and categories are
   gone. Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
 - Rooms: the game's 25 `Il2Cpp.Room`s. `Room.volumes` is empty at runtime, so a room's space is
   the Unity `OcclusionArea` boxes on its children (offline check `tools\rip\room_check.py`: 797 of

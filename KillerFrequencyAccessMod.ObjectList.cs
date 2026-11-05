@@ -10,10 +10,12 @@ namespace Killer_Frequency_Access;
 
 /// <summary>
 /// Object list, always available outside menus (user design, 2026-11-05):
-/// Home/End move between three levels, Page Up/Page Down move along the level, Backspace walks to the entry.
-///   1. rooms (the first entry is the room the player is in, and follows them),
-///   2. what stands on its own in the room: devices, drawers, doors, docks and loose objects,
-///   3. what is in or on the level-2 entry: device parts, a drawer's slot and contents, a dock's item.
+/// a tree. End goes into the current entry, Home comes back out, Page Up/Page Down move along a level,
+/// Backspace walks to the entry.
+///   rooms (the first entry is the room the player is in, and follows them),
+///   then what stands on its own in the room: devices, drawers, doors, docks and loose objects,
+///   then, for every container at any depth, its direct contents: a device's parts, a drawer's slot,
+///   the item in a slot.
 ///
 /// Facts used:
 /// - Rooms are the game's Il2Cpp.Room components; a room's space is its OcclusionArea children (797 of 804
@@ -26,7 +28,7 @@ namespace Killer_Frequency_Access;
 /// - Containment is the hierarchy: docked items are children of their dock at runtime (AttachPoint), handles
 ///   and keypads are children of their door or drawer, device parts are below the device component
 ///   (VinylPlayer, CassettePlayer, SoundBoard, ... the list in tools/rip/gen_names.py DEVICES, plus Board).
-///   The outermost such ancestor is the level-2 entry. Loose items inside cabinets and the fridge are not
+///   An object's parent in the list is its nearest such ancestor, at any depth. Loose items inside cabinets and the fridge are not
 ///   children of them (rip: no slots), so they stand on their own.
 /// - Hidden: contents of a room the player is not in whose doorways are all closed (its doors stay listed),
 ///   and everything below a closed Openable (Openable.IsFullyClosed).
@@ -71,55 +73,55 @@ public sealed partial class KillerFrequencyAccessMod
         public int Id => Room.GetInstanceID();
     }
 
-    private sealed class ListEntry
+    private sealed class ListNode
     {
-        public Transform Root = null!;
+        public Transform Transform = null!;
         public string Name = string.Empty;
-        public bool RootIsListed;
+        public bool Listed;
         public Il2Cpp.Openable? Openable;
         public bool IsRoomDoor;
         public bool RoomsResolved;
+        public ListNode? Parent;
+        public readonly List<ListNode> Children = new();
         public readonly HashSet<int> RoomIds = new();
         public readonly List<string> LeadsTo = new();
-        public readonly List<Transform> Contents = new();
-        public int Id => Root.GetInstanceID();
+        public int Id => Transform.GetInstanceID();
         public bool IsClosed => Openable != null && !IsRoomDoor && Openable.IsFullyClosed();
     }
 
-    private enum ListLevel { Rooms, Objects, Contents }
+    // Kept for callers outside the list (auto-walk): whether the list is at the rooms level.
+    private enum ListLevel { Rooms, Objects }
 
     private static List<RoomInfo> _rooms = new();
     private static float _nextRoomRefreshTime = -100f;
 
-    private ListLevel _listLevel = ListLevel.Rooms;
+    // Depth 0 is rooms, 1 the room's own objects, d >= 2 the children of the node selected at d - 1.
+    // _path[d - 1] is the selected node at depth d.
+    private int _depth;
+    private readonly List<int> _path = new();
     private int _roomIndex;
-    private int _entryIndex;
-    private int _itemIndex;
     private int _selectedRoomId = -1; // -1: the room the player is in
-    private int _selectedEntryId = -1;
-    private int _selectedItemId = -1;
 
     // Rebuilt on every list key, so the list always shows the world as it is now.
     private List<(RoomInfo? Room, string Label)> _roomChoices = new();
-    private readonly Dictionary<int, ListEntry> _entriesById = new();
+    private readonly Dictionary<int, ListNode> _nodes = new();
+    private readonly List<ListNode> _topNodes = new();
     private readonly HashSet<int> _accessibleRoomIds = new();
     private RoomInfo? _playerRoom;
 
-    // Per key press: the current group's members, sorted once. Positions are only read for these.
-    private List<ListEntry>? _entriesMemo;
-    private int _entriesMemoRoomKey;
-    private List<Transform>? _itemsMemo;
-    private int _itemsMemoEntryId;
+    // Per key press: a group's members, filtered and sorted once. Positions are only read for these.
+    private readonly Dictionary<(int Depth, int Owner), List<ListNode>> _groupMemo = new();
 
     // Player context (user request 2026-11-05), applied at the next list key: entering a room lists its
-    // objects; looking at an object selects it, and a container (or a part of one) lists its contents.
+    // objects; looking at an object selects it, and looking at a container lists its contents.
     private enum ListContext { None, EnteredRoom, LookedAt }
     private ListContext _pendingContext;
-    private int _contextRootId;
-    private int _contextItemId;
+    private int _contextNodeId;
 
     private string _lastPlayerRoomName = string.Empty;
     private float _nextPlayerRoomCheckTime;
+
+    private ListLevel _listLevel => _depth == 0 ? ListLevel.Rooms : ListLevel.Objects;
 
     /// <summary>Handles Home, End, Page Up and Page Down. Returns true when one was pressed.</summary>
     private bool HandleObjectListKeys()
@@ -137,36 +139,296 @@ public sealed partial class KillerFrequencyAccessMod
         var atStart = ApplyPendingContext();
         if (atStart && (previous || next))
         {
-            // The context just reset the list to its start: read that entry instead of skipping past it.
-            SpeakSelectionText(_listLevel == ListLevel.Contents
-                ? $"In {SelectedEntry()?.Name ?? "nothing"}. {DescribeItem()}"
-                : $"Objects in {SelectedRoomName()}. {DescribeEntry()}");
+            // The context just reset the list to the start of a group: read that entry instead of skipping it.
+            SpeakSelectionText($"{GroupTitle(_depth)}. {DescribeSelected(_depth)}");
             return true;
         }
 
         if (up)
         {
-            MoveLevel(-1);
+            if (_depth > 0)
+            {
+                _depth--;
+            }
+
+            SpeakSelectionText($"{GroupTitle(_depth)}. {DescribeSelected(_depth)}");
         }
         else if (down)
         {
-            MoveLevel(1);
+            GoIn();
         }
         else
         {
-            MoveInLevel(next ? 1 : -1);
+            MoveInGroup(next ? 1 : -1);
         }
 
         return true;
     }
 
+    private void GoIn()
+    {
+        if (_depth == 0)
+        {
+            if (Group(1).Count == 0)
+            {
+                SpeakSelectionText($"No objects listed in {SelectedRoomName()}");
+                return;
+            }
+
+            _depth = 1;
+            SpeakSelectionText($"{GroupTitle(1)}. {DescribeSelected(1)}");
+            return;
+        }
+
+        var node = SelectedNode(_depth);
+        if (node == null)
+        {
+            SpeakSelectionText("Nothing selected");
+            return;
+        }
+
+        if (node.IsClosed)
+        {
+            SpeakSelectionText($"{node.Name} is closed");
+            return;
+        }
+
+        if (Group(_depth + 1).Count == 0)
+        {
+            SpeakSelectionText($"Nothing in {node.Name}");
+            return;
+        }
+
+        _depth++;
+        SpeakSelectionText($"{GroupTitle(_depth)}. {DescribeSelected(_depth)}");
+    }
+
+    private void MoveInGroup(int direction)
+    {
+        if (_depth == 0)
+        {
+            _roomIndex = Wrap(_roomIndex + direction, _roomChoices.Count);
+            _selectedRoomId = _roomIndex == 0 ? -1 : _roomChoices[_roomIndex].Room?.Id ?? -1;
+            _path.Clear();
+            _groupMemo.Clear();
+            SpeakSelectionText(DescribeSelected(0));
+            return;
+        }
+
+        var group = Group(_depth);
+        if (group.Count == 0)
+        {
+            SpeakSelectionText("Empty");
+            return;
+        }
+
+        var index = Wrap(SelectedIndex(_depth, group) + direction, group.Count);
+        SetSelected(_depth, group[index].Id);
+        SpeakSelectionText(DescribeSelected(_depth));
+    }
+
+    private static int Wrap(int index, int count)
+    {
+        return count == 0 ? 0 : ((index % count) + count) % count;
+    }
+
+    /// <summary>Selects a node at a depth and forgets the selections below it.</summary>
+    private void SetSelected(int depth, int nodeId)
+    {
+        while (_path.Count >= depth)
+        {
+            _path.RemoveAt(_path.Count - 1);
+        }
+
+        while (_path.Count < depth - 1)
+        {
+            _path.Add(-1);
+        }
+
+        _path.Add(nodeId);
+    }
+
+    private int SelectedIndex(int depth, List<ListNode> group)
+    {
+        var id = depth - 1 < _path.Count ? _path[depth - 1] : -1;
+        return Math.Max(0, group.FindIndex(n => n.Id == id));
+    }
+
+    private ListNode? SelectedNode(int depth)
+    {
+        var group = Group(depth);
+        if (group.Count == 0)
+        {
+            return null;
+        }
+
+        var node = group[SelectedIndex(depth, group)];
+        if (depth - 1 >= _path.Count || _path[depth - 1] != node.Id)
+        {
+            SetSelected(depth, node.Id);
+        }
+
+        return node;
+    }
+
+    /// <summary>
+    /// The members of the group at a depth, nearest first: the room's own objects at depth 1 (a closed room
+    /// shows only its doors), otherwise the children of the node selected one level up (none while it is closed).
+    /// </summary>
+    private List<ListNode> Group(int depth)
+    {
+        if (depth <= 0)
+        {
+            return new List<ListNode>();
+        }
+
+        if (depth == 1)
+        {
+            var room = SelectedRoom();
+            var key = (1, room?.Id ?? 0);
+            if (!_groupMemo.TryGetValue(key, out var members))
+            {
+                var accessible = IsRoomAccessible(room);
+                members = new List<ListNode>();
+                foreach (var node in _topNodes)
+                {
+                    ResolveNodeRooms(node);
+                    var inRoom = room == null ? node.RoomIds.Count == 0 : node.RoomIds.Contains(room.Id);
+                    if (inRoom && (accessible || node.IsRoomDoor))
+                    {
+                        members.Add(node);
+                    }
+                }
+
+                SortNearest(members, n => n.Transform);
+                _groupMemo[key] = members;
+            }
+
+            return members;
+        }
+
+        var owner = SelectedNode(depth - 1);
+        if (owner == null || owner.IsClosed)
+        {
+            return new List<ListNode>();
+        }
+
+        var ownerKey = (depth, owner.Id);
+        if (!_groupMemo.TryGetValue(ownerKey, out var children))
+        {
+            children = new List<ListNode>(owner.Children);
+            SortNearest(children, n => n.Transform);
+            _groupMemo[ownerKey] = children;
+        }
+
+        return children;
+    }
+
+    private string GroupTitle(int depth)
+    {
+        return depth switch
+        {
+            0 => "Rooms",
+            1 => $"Objects in {SelectedRoomName()}",
+            _ => $"In {SelectedNode(depth - 1)?.Name ?? "nothing"}",
+        };
+    }
+
+    private string DescribeSelected(int depth)
+    {
+        if (depth == 0)
+        {
+            if (_roomChoices.Count == 0)
+            {
+                return "No rooms";
+            }
+
+            var room = SelectedRoom();
+            var closed = IsRoomAccessible(room) ? string.Empty : ", closed";
+            return $"{_roomChoices[_roomIndex].Label}{closed}, {Group(1).Count} objects, {_roomIndex + 1} of {_roomChoices.Count}";
+        }
+
+        var group = Group(depth);
+        if (group.Count == 0)
+        {
+            return "Empty";
+        }
+
+        var index = SelectedIndex(depth, group);
+        var node = group[index];
+        if (depth - 1 >= _path.Count || _path[depth - 1] != node.Id)
+        {
+            SetSelected(depth, node.Id);
+        }
+
+        var parts = new List<string> { node.Name };
+        if (node.IsRoomDoor)
+        {
+            var here = SelectedRoom()?.Name;
+            var others = node.LeadsTo.FindAll(name => name != here);
+            if (others.Count > 0)
+            {
+                parts.Add($"to {string.Join(" and ", others)}");
+            }
+        }
+
+        if (node.IsClosed)
+        {
+            parts.Add("closed");
+        }
+        else if (node.Children.Count > 0)
+        {
+            parts.Add(node.Children.Count == 1 ? "1 item" : $"{node.Children.Count} items");
+        }
+
+        if (TryGetNavigationOrigin(out var origin))
+        {
+            parts.Add(DescribeWhere(origin, GetNearestPoint(node.Transform, origin.position)));
+        }
+
+        parts.Add($"{index + 1} of {group.Count}");
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>The object Backspace walks to: the selected node, or for a container the game cannot use, its first usable part (breadth first).</summary>
+    private Transform? GetListWalkTarget()
+    {
+        RebuildObjectIndex();
+        if (_depth == 0)
+        {
+            return null;
+        }
+
+        var node = SelectedNode(_depth);
+        if (node == null)
+        {
+            return null;
+        }
+
+        var queue = new Queue<ListNode>();
+        queue.Enqueue(node);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (current.Listed)
+            {
+                return current.Transform;
+            }
+
+            foreach (var child in current.Children)
+            {
+                queue.Enqueue(child);
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Called when the game starts reporting a new observed interactable.</summary>
     private void SetListContextLookedAt(Transform observed)
     {
-        var root = FindContainerRoot(observed);
         _pendingContext = ListContext.LookedAt;
-        _contextRootId = root.GetInstanceID();
-        _contextItemId = root == observed ? -1 : observed.GetInstanceID();
+        _contextNodeId = observed.GetInstanceID();
     }
 
     /// <summary>Applies the latest context. Returns true when it left the list at the start of a group.</summary>
@@ -181,179 +443,56 @@ public sealed partial class KillerFrequencyAccessMod
 
         _selectedRoomId = -1;
         _roomIndex = 0;
-        _entriesMemo = null;
-        _itemsMemo = null;
-        _selectedItemId = -1;
+        _groupMemo.Clear();
         if (context == ListContext.EnteredRoom)
         {
-            _listLevel = ListLevel.Objects;
-            _selectedEntryId = -1;
+            _path.Clear();
+            _depth = 1;
             return true;
         }
 
-        // Looked at: select the object (or its container) in the player's room; a container lists its contents.
-        if (!_entriesById.TryGetValue(_contextRootId, out var entry) || !CurrentEntries().Exists(e => e.Id == entry.Id))
+        // Looked at: the chain from the room's own object down to the node, which must be in the player's room.
+        if (!_nodes.TryGetValue(_contextNodeId, out var target))
         {
             return false;
         }
 
-        _selectedEntryId = entry.Id;
-        _listLevel = ListLevel.Objects;
-        if (!entry.IsClosed && CurrentItems().Count > 0)
+        var chain = new List<ListNode>();
+        for (var node = target; node != null; node = node.Parent)
         {
-            _listLevel = ListLevel.Contents;
-            _selectedItemId = _contextItemId;
-            return _contextItemId == -1;
+            chain.Insert(0, node);
+        }
+
+        if (!Group(1).Exists(n => n.Id == chain[0].Id))
+        {
+            return false;
+        }
+
+        _path.Clear();
+        foreach (var node in chain)
+        {
+            _path.Add(node.Id);
+        }
+
+        _depth = chain.Count;
+        if (!target.IsClosed && target.Children.Count > 0)
+        {
+            // A container: list what is in it.
+            _depth++;
+            return true;
         }
 
         return false;
     }
 
-    private void MoveLevel(int direction)
-    {
-        if (direction < 0)
-        {
-            if (_listLevel == ListLevel.Rooms)
-            {
-                SpeakSelectionText($"Rooms. {DescribeRoomChoice()}");
-                return;
-            }
-
-            _listLevel--;
-            SpeakSelectionText(_listLevel == ListLevel.Rooms
-                ? $"Rooms. {DescribeRoomChoice()}"
-                : $"Objects in {SelectedRoomName()}. {DescribeEntry()}");
-            return;
-        }
-
-        if (_listLevel == ListLevel.Rooms)
-        {
-            if (CurrentEntries().Count == 0)
-            {
-                SpeakSelectionText($"No objects listed in {SelectedRoomName()}");
-                return;
-            }
-
-            _listLevel = ListLevel.Objects;
-            SpeakSelectionText($"Objects in {SelectedRoomName()}. {DescribeEntry()}");
-            return;
-        }
-
-        if (_listLevel == ListLevel.Objects)
-        {
-            var entry = SelectedEntry();
-            if (entry == null)
-            {
-                SpeakSelectionText("No object selected");
-                return;
-            }
-
-            if (entry.IsClosed)
-            {
-                SpeakSelectionText($"{entry.Name} is closed");
-                return;
-            }
-
-            if (CurrentItems().Count == 0)
-            {
-                SpeakSelectionText($"Nothing in {entry.Name}");
-                return;
-            }
-
-            _listLevel = ListLevel.Contents;
-            SpeakSelectionText($"In {entry.Name}. {DescribeItem()}");
-            return;
-        }
-
-        SpeakSelectionText($"In {SelectedEntry()?.Name ?? "nothing"}. {DescribeItem()}");
-    }
-
-    private void MoveInLevel(int direction)
-    {
-        switch (_listLevel)
-        {
-            case ListLevel.Rooms:
-                _roomIndex = Wrap(_roomIndex + direction, _roomChoices.Count);
-                _selectedRoomId = _roomIndex == 0 ? -1 : _roomChoices[_roomIndex].Room?.Id ?? -1;
-                _selectedEntryId = -1;
-                _selectedItemId = -1;
-                _entriesMemo = null;
-                _itemsMemo = null;
-                SpeakSelectionText(DescribeRoomChoice());
-                break;
-            case ListLevel.Objects:
-                var entries = CurrentEntries();
-                if (entries.Count == 0)
-                {
-                    SpeakSelectionText("Empty");
-                    return;
-                }
-
-                _entryIndex = Wrap(_entryIndex + direction, entries.Count);
-                _selectedEntryId = entries[_entryIndex].Id;
-                _selectedItemId = -1;
-                _itemsMemo = null;
-                SpeakSelectionText(DescribeEntry());
-                break;
-            default:
-                var items = CurrentItems();
-                if (items.Count == 0)
-                {
-                    SpeakSelectionText("Empty");
-                    return;
-                }
-
-                _itemIndex = Wrap(_itemIndex + direction, items.Count);
-                _selectedItemId = items[_itemIndex].GetInstanceID();
-                SpeakSelectionText(DescribeItem());
-                break;
-        }
-    }
-
-    private static int Wrap(int index, int count)
-    {
-        return count == 0 ? 0 : ((index % count) + count) % count;
-    }
-
-    /// <summary>The object Backspace walks to: the selected level-3 item, or the level-2 entry (its first part for a device).</summary>
-    private Transform? GetListWalkTarget()
-    {
-        RebuildObjectIndex();
-        if (_listLevel == ListLevel.Contents)
-        {
-            var items = CurrentItems();
-            return items.Count > 0 ? items[_itemIndex] : null;
-        }
-
-        if (_listLevel == ListLevel.Objects)
-        {
-            var entry = SelectedEntry();
-            if (entry == null)
-            {
-                return null;
-            }
-
-            if (entry.RootIsListed)
-            {
-                return entry.Root;
-            }
-
-            var items = CurrentItems();
-            return items.Count > 0 ? items[0] : null;
-        }
-
-        return null;
-    }
-
     private string SelectedRoomName()
     {
-        var room = SelectedRoom();
-        return room?.Name ?? "no room";
+        return SelectedRoom()?.Name ?? "no room";
     }
 
     private RoomInfo? SelectedRoom()
     {
-        return _roomIndex == 0 ? _playerRoom : _roomChoices[_roomIndex].Room;
+        return _roomIndex == 0 || _roomIndex >= _roomChoices.Count ? _playerRoom : _roomChoices[_roomIndex].Room;
     }
 
     private bool IsRoomAccessible(RoomInfo? room)
@@ -361,107 +500,20 @@ public sealed partial class KillerFrequencyAccessMod
         return room == null || _accessibleRoomIds.Contains(room.Id);
     }
 
-    /// <summary>Level-2 entries in the selected room, nearest first. A closed room shows only its doors.</summary>
-    private List<ListEntry> CurrentEntries()
+    /// <summary>A top node's room from its position, read only when its room's members are needed.</summary>
+    private static void ResolveNodeRooms(ListNode node)
     {
-        var room = SelectedRoom();
-        var roomKey = room?.Id ?? 0;
-        if (_entriesMemo == null || _entriesMemoRoomKey != roomKey)
-        {
-            var accessible = IsRoomAccessible(room);
-            var result = new List<ListEntry>();
-            foreach (var entry in _entriesById.Values)
-            {
-                ResolveEntryRooms(entry);
-                var inRoom = room == null ? entry.RoomIds.Count == 0 : entry.RoomIds.Contains(room.Id);
-                if (inRoom && (accessible || entry.IsRoomDoor))
-                {
-                    result.Add(entry);
-                }
-            }
-
-            SortNearest(result, e => e.Root);
-            _entriesMemo = result;
-            _entriesMemoRoomKey = roomKey;
-        }
-
-        _entryIndex = Math.Max(0, _entriesMemo.FindIndex(e => e.Id == _selectedEntryId));
-        if (_entriesMemo.Count > 0)
-        {
-            _selectedEntryId = _entriesMemo[_entryIndex].Id;
-        }
-
-        return _entriesMemo;
-    }
-
-    /// <summary>An entry's room from its position, read only when its room's members are needed.</summary>
-    private static void ResolveEntryRooms(ListEntry entry)
-    {
-        if (entry.RoomsResolved)
+        if (node.RoomsResolved)
         {
             return;
         }
 
-        entry.RoomsResolved = true;
-        var room = RoomOf(entry.Root.position);
+        node.RoomsResolved = true;
+        var room = RoomOf(node.Transform.position);
         if (room != null)
         {
-            entry.RoomIds.Add(room.Id);
+            node.RoomIds.Add(room.Id);
         }
-    }
-
-    private ListEntry? SelectedEntry()
-    {
-        var entries = CurrentEntries();
-        return entries.Count > 0 ? entries[_entryIndex] : null;
-    }
-
-    /// <summary>Level-3 items of the selected entry, nearest first; none while the entry is closed.</summary>
-    private List<Transform> CurrentItems()
-    {
-        var entry = SelectedEntry();
-        if (entry == null || entry.IsClosed)
-        {
-            return new List<Transform>();
-        }
-
-        if (_itemsMemo == null || _itemsMemoEntryId != entry.Id)
-        {
-            var result = new List<Transform>();
-            foreach (var item in entry.Contents)
-            {
-                if (item != null && !IsBelowClosedOpenable(item, entry.Root))
-                {
-                    result.Add(item);
-                }
-            }
-
-            SortNearest(result, t => t);
-            _itemsMemo = result;
-            _itemsMemoEntryId = entry.Id;
-        }
-
-        _itemIndex = Math.Max(0, _itemsMemo.FindIndex(t => t.GetInstanceID() == _selectedItemId));
-        if (_itemsMemo.Count > 0)
-        {
-            _selectedItemId = _itemsMemo[_itemIndex].GetInstanceID();
-        }
-
-        return _itemsMemo;
-    }
-
-    private static bool IsBelowClosedOpenable(Transform item, Transform root)
-    {
-        for (var current = item.parent; current != null && current != root.parent; current = current.parent)
-        {
-            var openable = current.GetComponent<Il2Cpp.Openable>();
-            if (openable != null && openable.IsFullyClosed())
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void SortNearest<T>(List<T> list, Func<T, Transform> transformOf)
@@ -489,80 +541,7 @@ public sealed partial class KillerFrequencyAccessMod
         list.Sort((a, b) => DistanceOf(a).CompareTo(DistanceOf(b)));
     }
 
-    private string DescribeRoomChoice()
-    {
-        if (_roomChoices.Count == 0)
-        {
-            return "No rooms";
-        }
-
-        var room = SelectedRoom();
-        var count = CurrentEntries().Count;
-        var closed = IsRoomAccessible(room) ? string.Empty : ", closed";
-        return $"{_roomChoices[_roomIndex].Label}{closed}, {count} objects, {_roomIndex + 1} of {_roomChoices.Count}";
-    }
-
-    private string DescribeEntry()
-    {
-        var entries = CurrentEntries();
-        if (entries.Count == 0)
-        {
-            return "Empty";
-        }
-
-        var entry = entries[_entryIndex];
-        var parts = new List<string> { entry.Name };
-        if (entry.IsRoomDoor && entry.LeadsTo.Count > 0)
-        {
-            var room = SelectedRoom();
-            var others = entry.LeadsTo.FindAll(name => name != room?.Name);
-            if (others.Count > 0)
-            {
-                parts.Add($"to {string.Join(" and ", others)}");
-            }
-        }
-
-        if (entry.IsClosed)
-        {
-            parts.Add("closed");
-        }
-        else
-        {
-            var visible = entry.Contents.FindAll(t => t != null && !IsBelowClosedOpenable(t, entry.Root)).Count;
-            if (visible > 0)
-            {
-                parts.Add(visible == 1 ? "1 item" : $"{visible} items");
-            }
-        }
-
-        if (TryGetNavigationOrigin(out var origin))
-        {
-            parts.Add(DescribeWhere(origin, GetNearestPoint(entry.Root, origin.position)));
-        }
-
-        parts.Add($"{_entryIndex + 1} of {entries.Count}");
-        return string.Join(", ", parts);
-    }
-
-    private string DescribeItem()
-    {
-        var items = CurrentItems();
-        if (items.Count == 0)
-        {
-            return "Empty";
-        }
-
-        var item = items[_itemIndex];
-        var text = GetSpokenName(item);
-        if (TryGetNavigationOrigin(out var origin))
-        {
-            text += $", {DescribeWhere(origin, GetNearestPoint(item, origin.position))}";
-        }
-
-        return $"{text}, {_itemIndex + 1} of {items.Count}";
-    }
-
-    /// <summary>Rebuilds rooms, doorways and entries from the game's current state.</summary>
+    /// <summary>Rebuilds rooms, doorways and the object tree from the game's current state. No positions are read.</summary>
     private void RebuildObjectIndex()
     {
         var rooms = GetRooms();
@@ -592,8 +571,7 @@ public sealed partial class KillerFrequencyAccessMod
             var back = portal._backRoom != null && roomsById.TryGetValue(portal._backRoom.GetInstanceID(), out var b) ? b : null;
             var doorPortal = portal.TryCast<Il2Cpp.RoomPortalDoor>();
             var door = doorPortal?._door;
-            var open = doorPortal == null || door == null || doorPortal.isOpen;
-            if (open)
+            if (doorPortal == null || door == null || doorPortal.isOpen)
             {
                 if (front != null) _accessibleRoomIds.Add(front.Id);
                 if (back != null) _accessibleRoomIds.Add(back.Id);
@@ -608,14 +586,13 @@ public sealed partial class KillerFrequencyAccessMod
             }
         }
 
-        // Entries: every active interactable with an action the game says is available now, under its
-        // outermost container. No count cap and no distance limit; no positions are read here. OculusOnly
-        // marks the 98 VR grab handles (rip), which flat-screen play cannot use.
-        _entriesById.Clear();
-        _entriesMemo = null;
-        _itemsMemo = null;
-        var listed = new HashSet<int>();
-        var items = new List<Transform>();
+        // The tree: every active interactable with an action the game says is available now, linked to its
+        // nearest container ancestor. No count cap and no distance limit. OculusOnly marks the 98 VR grab
+        // handles (rip), which flat-screen play cannot use.
+        _nodes.Clear();
+        _topNodes.Clear();
+        _groupMemo.Clear();
+        var listedItems = new List<Transform>();
         foreach (var interactable in UnityEngine.Object.FindObjectsOfType<GameInteractableBase>())
         {
             if (interactable == null || !interactable.isActiveAndEnabled || interactable.OculusOnly
@@ -624,22 +601,37 @@ public sealed partial class KillerFrequencyAccessMod
                 continue;
             }
 
-            listed.Add(interactable.transform.GetInstanceID());
-            items.Add(interactable.transform);
+            listedItems.Add(interactable.transform);
         }
 
-        foreach (var item in items)
+        foreach (var item in listedItems)
         {
-            var root = FindContainerRoot(item);
-            if (!_entriesById.TryGetValue(root.GetInstanceID(), out var entry))
-            {
-                entry = CreateEntry(root, listed, doorRooms);
-                _entriesById[entry.Id] = entry;
-            }
+            GetOrCreateNode(item, doorRooms).Listed = true;
+        }
 
-            if (root != item)
+        foreach (var item in listedItems)
+        {
+            var node = _nodes[item.GetInstanceID()];
+            while (node.Parent == null)
             {
-                entry.Contents.Add(item);
+                var ancestor = FindContainerAncestor(node.Transform);
+                if (ancestor == null)
+                {
+                    break;
+                }
+
+                var parent = GetOrCreateNode(ancestor, doorRooms);
+                node.Parent = parent;
+                parent.Children.Add(node);
+                node = parent;
+            }
+        }
+
+        foreach (var node in _nodes.Values)
+        {
+            if (node.Parent == null)
+            {
+                _topNodes.Add(node);
             }
         }
 
@@ -655,60 +647,61 @@ public sealed partial class KillerFrequencyAccessMod
         _roomIndex = _selectedRoomId == -1 ? 0 : Math.Max(0, _roomChoices.FindIndex(c => c.Room != null && c.Room.Id == _selectedRoomId));
     }
 
-    private ListEntry CreateEntry(Transform root, HashSet<int> listed, Dictionary<int, List<RoomInfo>> doorRooms)
+    private ListNode GetOrCreateNode(Transform transform, Dictionary<int, List<RoomInfo>> doorRooms)
     {
-        var entry = new ListEntry
+        var id = transform.GetInstanceID();
+        if (_nodes.TryGetValue(id, out var existing))
         {
-            Root = root,
-            RootIsListed = listed.Contains(root.GetInstanceID()),
-            Openable = root.GetComponent<Il2Cpp.Openable>(),
+            return existing;
+        }
+
+        var node = new ListNode
+        {
+            Transform = transform,
+            Openable = transform.GetComponent<Il2Cpp.Openable>(),
         };
-        entry.Name = DeviceLabel(root) ?? GetSpokenName(root);
-        if (doorRooms.TryGetValue(root.GetInstanceID(), out var joined))
+        node.Name = DeviceLabel(transform) ?? GetSpokenName(transform);
+        if (doorRooms.TryGetValue(id, out var joined))
         {
-            entry.IsRoomDoor = true;
-            entry.RoomsResolved = true;
+            node.IsRoomDoor = true;
+            node.RoomsResolved = true;
             foreach (var room in joined)
             {
-                entry.RoomIds.Add(room.Id);
-                entry.LeadsTo.Add(room.Name);
+                node.RoomIds.Add(room.Id);
+                node.LeadsTo.Add(room.Name);
             }
         }
 
-        return entry;
+        _nodes[id] = node;
+        return node;
     }
 
-    // Container root per item, keyed by the item and its current parent (docking re-parents an item).
-    private static readonly Dictionary<(int Item, int Parent), Transform> ContainerRootCache = new();
+    // Nearest container ancestor per object, keyed by the object and its current parent (docking re-parents).
+    private static readonly Dictionary<(int Item, int Parent), Transform?> ContainerAncestorCache = new();
 
-    /// <summary>The outermost ancestor that is an interactable, an Openable or a device; the item itself if none.</summary>
-    private static Transform FindContainerRoot(Transform item)
+    /// <summary>The nearest ancestor that is an interactable, an Openable or a device; null if none.</summary>
+    private static Transform? FindContainerAncestor(Transform item)
     {
         var key = (item.GetInstanceID(), item.parent == null ? 0 : item.parent.GetInstanceID());
-        if (ContainerRootCache.TryGetValue(key, out var cached) && cached != null)
+        if (ContainerAncestorCache.TryGetValue(key, out var cached) && (cached is null || cached != null))
         {
             return cached;
         }
 
-        var found = FindContainerRootUncached(item);
-        ContainerRootCache[key] = found;
-        return found;
-    }
-
-    private static Transform FindContainerRootUncached(Transform item)
-    {
-        var root = item;
+        Transform? found = null;
         for (var current = item.parent; current != null; current = current.parent)
         {
             if (current.GetComponent<GameInteractableBase>() != null
                 || current.GetComponent<Il2Cpp.Openable>() != null
                 || DeviceLabel(current) != null)
             {
-                root = current;
+                found = current;
+                break;
             }
         }
 
-        return root;
+        ContainerAncestorCache[key] = found;
+        return found;
     }
 
     /// <summary>Spoken device name with the number at the end of its object name, as gen_names.py does; null if not a device.</summary>

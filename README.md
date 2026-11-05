@@ -4,7 +4,7 @@
 - Speaks game text through your screen reader (via Prism), or the Windows voice when none is running.
 - Plays a rising tone when an object or a conversation's answers come into range, so you can use them, and a falling tone when they go out of range.
 - Arrow keys move through conversation answers while they are on screen. WASD still walks.
-- Object list: Home and End move between rooms, the objects in a room, and what is in or on an object; Page Up and Page Down move through the current level. Backspace walks to the selected object; you hear its name and a tone once you can use it.
+- Object list: rooms, the objects in a room, and what is in or on each object, as deep as things are nested. End goes into the current entry, Home comes back out, Page Up and Page Down move through the current level. The list follows you: walking into a room lists its objects, and looking at a container lists what is in it. Backspace walks to the selected object; you hear its name and a tone once you can use it.
 
 Note that the mod is incomplete and as of yet does not work. In particular, the objects in the studio are not being included in the list of scannable objects.
 
