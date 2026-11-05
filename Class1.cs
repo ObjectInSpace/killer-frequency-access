@@ -8,7 +8,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-[assembly: MelonInfo(typeof(Killer_Frequency_Access.KillerFrequencyAccessMod), "Killer Frequency Access", "0.1.0", "amock")]
+[assembly: MelonInfo(typeof(Killer_Frequency_Access.KillerFrequencyAccessMod), "Killer Frequency Access", "0.9.0", "amock")]
 [assembly: MelonGame(null, "Killer Frequency")]
 
 namespace Killer_Frequency_Access;
