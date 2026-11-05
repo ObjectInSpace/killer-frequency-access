@@ -11,7 +11,7 @@ namespace Killer_Frequency_Access;
 // "WSAD" composites with no parts, so the keyboard does nothing there. Gameplay/Move and MoveRaw bind
 // both WASD and the arrows, and walking stays allowed during a choice (user observation).
 //
-// So while WorldUIManager.answerRoot has active answers, this gives the game's own Navigate_InGame
+// So while WorldUIManager.answerRoot has active answers and IsChoicesUiInRange() is true, this gives the game's own Navigate_InGame
 // action an arrow-key composite and switches the arrow parts of Move/MoveRaw off with an empty
 // binding override; when the answers go away it reverses both. WASD always walks. Nothing is injected:
 // the game reads its own actions as usual.
@@ -41,7 +41,10 @@ public sealed partial class KillerFrequencyAccessMod
                 _lastAnswerCount = answers;
             }
 
-            var wantActive = answers > 0;
+            // Out of range the game ignores Navigate_InGame, so arrows walk again until the player is back
+            // in range (user report 2026-11-05: arrows did nothing after walking away from a choice).
+            var ui = TryGetWorldUi();
+            var wantActive = answers > 0 && ui != null && ui.IsChoicesUiInRange();
             if (wantActive == _dialogArrowsActive)
             {
                 return;
