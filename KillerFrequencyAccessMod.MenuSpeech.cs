@@ -89,8 +89,18 @@ public sealed partial class KillerFrequencyAccessMod
 
     private void LogTopMenuChange()
     {
-        var top = BootServices.menuManager?.currentTopMenu;
-        var key = top == null ? "none" : $"{top.id} visible={top.isVisible} focus={top.hasFocus}";
+        string key;
+        try
+        {
+            var top = BootServices.menuManager?.currentTopMenu;
+            key = top == null ? "none" : $"{top.id} visible={top.isVisible} focus={top.hasFocus}";
+        }
+        catch
+        {
+            // Log 2026-11-05: Menu.get_isVisible threw NullReferenceException while the main menu closed.
+            return;
+        }
+
         if (key != _lastTopMenuKey)
         {
             _lastTopMenuKey = key;
