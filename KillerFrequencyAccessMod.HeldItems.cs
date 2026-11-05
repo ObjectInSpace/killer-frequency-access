@@ -386,13 +386,10 @@ public sealed partial class KillerFrequencyAccessMod
         MelonLoader.MelonLogger.Msg($"[held] {text}");
         var places = FindPlacesForHeldItem();
         _placesForHeldIds = new HashSet<int>(places.ConvertAll(t => t.GetInstanceID()));
+        // A general prompt, not the count or names of places (user request 2026-11-05).
         if (places.Count > 0)
         {
-            var names = places.ConvertAll(t => GetSpokenName(t));
-            text += places.Count <= 3
-                ? $". Fits {string.Join(", ", names)}"
-                : $". Fits {places.Count} places";
-            text += $". To put it in, aim at it and {DescribePlaceKeys()}";
+            text += $". To put it somewhere, aim at a place it fits and {DescribePlaceKeys()}";
         }
 
         // Every action the game says the held item can do now (CanPerform), with its keys, as for pointed-at objects.
