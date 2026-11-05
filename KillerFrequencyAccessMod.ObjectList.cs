@@ -78,6 +78,7 @@ public sealed partial class KillerFrequencyAccessMod
         public bool RootIsListed;
         public Il2Cpp.Openable? Openable;
         public bool IsRoomDoor;
+        public bool RoomsResolved;
         public readonly HashSet<int> RoomIds = new();
         public readonly List<string> LeadsTo = new();
         public readonly List<Transform> Contents = new();
@@ -103,6 +104,12 @@ public sealed partial class KillerFrequencyAccessMod
     private readonly Dictionary<int, ListEntry> _entriesById = new();
     private readonly HashSet<int> _accessibleRoomIds = new();
     private RoomInfo? _playerRoom;
+
+    // Per key press: the current group's members, sorted once. Positions are only read for these.
+    private List<ListEntry>? _entriesMemo;
+    private int _entriesMemoRoomKey;
+    private List<Transform>? _itemsMemo;
+    private int _itemsMemoEntryId;
 
     private string _lastPlayerRoomName = string.Empty;
     private float _nextPlayerRoomCheckTime;
@@ -204,6 +211,8 @@ public sealed partial class KillerFrequencyAccessMod
                 _selectedRoomId = _roomIndex == 0 ? -1 : _roomChoices[_roomIndex].Room?.Id ?? -1;
                 _selectedEntryId = -1;
                 _selectedItemId = -1;
+                _entriesMemo = null;
+                _itemsMemo = null;
                 SpeakSelectionText(DescribeRoomChoice());
                 break;
             case ListLevel.Objects:
@@ -217,6 +226,7 @@ public sealed partial class KillerFrequencyAccessMod
                 _entryIndex = Wrap(_entryIndex + direction, entries.Count);
                 _selectedEntryId = entries[_entryIndex].Id;
                 _selectedItemId = -1;
+                _itemsMemo = null;
                 SpeakSelectionText(DescribeEntry());
                 break;
             default:
@@ -289,25 +299,49 @@ public sealed partial class KillerFrequencyAccessMod
     private List<ListEntry> CurrentEntries()
     {
         var room = SelectedRoom();
-        var accessible = IsRoomAccessible(room);
-        var result = new List<ListEntry>();
-        foreach (var entry in _entriesById.Values)
+        var roomKey = room?.Id ?? 0;
+        if (_entriesMemo == null || _entriesMemoRoomKey != roomKey)
         {
-            var inRoom = room == null ? entry.RoomIds.Count == 0 : entry.RoomIds.Contains(room.Id);
-            if (inRoom && (accessible || entry.IsRoomDoor) && (entry.RootIsListed || entry.Contents.Count > 0))
+            var accessible = IsRoomAccessible(room);
+            var result = new List<ListEntry>();
+            foreach (var entry in _entriesById.Values)
             {
-                result.Add(entry);
+                ResolveEntryRooms(entry);
+                var inRoom = room == null ? entry.RoomIds.Count == 0 : entry.RoomIds.Contains(room.Id);
+                if (inRoom && (accessible || entry.IsRoomDoor))
+                {
+                    result.Add(entry);
+                }
             }
+
+            SortNearest(result, e => e.Root);
+            _entriesMemo = result;
+            _entriesMemoRoomKey = roomKey;
         }
 
-        SortNearest(result, e => e.Root);
-        _entryIndex = Math.Max(0, result.FindIndex(e => e.Id == _selectedEntryId));
-        if (result.Count > 0)
+        _entryIndex = Math.Max(0, _entriesMemo.FindIndex(e => e.Id == _selectedEntryId));
+        if (_entriesMemo.Count > 0)
         {
-            _selectedEntryId = result[_entryIndex].Id;
+            _selectedEntryId = _entriesMemo[_entryIndex].Id;
         }
 
-        return result;
+        return _entriesMemo;
+    }
+
+    /// <summary>An entry's room from its position, read only when its room's members are needed.</summary>
+    private static void ResolveEntryRooms(ListEntry entry)
+    {
+        if (entry.RoomsResolved)
+        {
+            return;
+        }
+
+        entry.RoomsResolved = true;
+        var room = RoomOf(entry.Root.position);
+        if (room != null)
+        {
+            entry.RoomIds.Add(room.Id);
+        }
     }
 
     private ListEntry? SelectedEntry()
@@ -325,23 +359,29 @@ public sealed partial class KillerFrequencyAccessMod
             return new List<Transform>();
         }
 
-        var result = new List<Transform>();
-        foreach (var item in entry.Contents)
+        if (_itemsMemo == null || _itemsMemoEntryId != entry.Id)
         {
-            if (item != null && !IsBelowClosedOpenable(item, entry.Root))
+            var result = new List<Transform>();
+            foreach (var item in entry.Contents)
             {
-                result.Add(item);
+                if (item != null && !IsBelowClosedOpenable(item, entry.Root))
+                {
+                    result.Add(item);
+                }
             }
+
+            SortNearest(result, t => t);
+            _itemsMemo = result;
+            _itemsMemoEntryId = entry.Id;
         }
 
-        SortNearest(result, t => t);
-        _itemIndex = Math.Max(0, result.FindIndex(t => t.GetInstanceID() == _selectedItemId));
-        if (result.Count > 0)
+        _itemIndex = Math.Max(0, _itemsMemo.FindIndex(t => t.GetInstanceID() == _selectedItemId));
+        if (_itemsMemo.Count > 0)
         {
-            _selectedItemId = result[_itemIndex].GetInstanceID();
+            _selectedItemId = _itemsMemo[_itemIndex].GetInstanceID();
         }
 
-        return result;
+        return _itemsMemo;
     }
 
     private static bool IsBelowClosedOpenable(Transform item, Transform root)
@@ -502,21 +542,31 @@ public sealed partial class KillerFrequencyAccessMod
             }
         }
 
-        // Entries: each listed interactable under its outermost container.
+        // Entries: every active interactable the game allows outside VR, under its outermost container.
+        // No positions are read here. OculusOnly marks the 98 VR grab handles (rip), which flat-screen
+        // play cannot use.
         _entriesById.Clear();
-        var candidates = new Dictionary<int, Transform>();
-        CollectGameInteractables(candidates);
-        foreach (var item in candidates.Values)
+        _entriesMemo = null;
+        _itemsMemo = null;
+        var listed = new HashSet<int>();
+        var items = new List<Transform>();
+        foreach (var interactable in UnityEngine.Object.FindObjectsOfType<GameInteractableBase>())
         {
-            if (item == null)
+            if (interactable == null || !interactable.isActiveAndEnabled || interactable.OculusOnly)
             {
                 continue;
             }
 
+            listed.Add(interactable.transform.GetInstanceID());
+            items.Add(interactable.transform);
+        }
+
+        foreach (var item in items)
+        {
             var root = FindContainerRoot(item);
             if (!_entriesById.TryGetValue(root.GetInstanceID(), out var entry))
             {
-                entry = CreateEntry(root, candidates, doorRooms);
+                entry = CreateEntry(root, listed, doorRooms);
                 _entriesById[entry.Id] = entry;
             }
 
@@ -538,30 +588,23 @@ public sealed partial class KillerFrequencyAccessMod
         _roomIndex = _selectedRoomId == -1 ? 0 : Math.Max(0, _roomChoices.FindIndex(c => c.Room != null && c.Room.Id == _selectedRoomId));
     }
 
-    private ListEntry CreateEntry(Transform root, Dictionary<int, Transform> candidates, Dictionary<int, List<RoomInfo>> doorRooms)
+    private ListEntry CreateEntry(Transform root, HashSet<int> listed, Dictionary<int, List<RoomInfo>> doorRooms)
     {
         var entry = new ListEntry
         {
             Root = root,
-            RootIsListed = candidates.ContainsKey(root.GetInstanceID()),
+            RootIsListed = listed.Contains(root.GetInstanceID()),
             Openable = root.GetComponent<Il2Cpp.Openable>(),
         };
         entry.Name = DeviceLabel(root) ?? GetSpokenName(root);
         if (doorRooms.TryGetValue(root.GetInstanceID(), out var joined))
         {
             entry.IsRoomDoor = true;
+            entry.RoomsResolved = true;
             foreach (var room in joined)
             {
                 entry.RoomIds.Add(room.Id);
                 entry.LeadsTo.Add(room.Name);
-            }
-        }
-        else
-        {
-            var room = RoomOf(root.position);
-            if (room != null)
-            {
-                entry.RoomIds.Add(room.Id);
             }
         }
 
