@@ -9,16 +9,14 @@ namespace Killer_Frequency_Access;
 // "Usable" is the game's own test, not a distance the mod picks:
 // - objects: ControllerBaseInteractor.observedInteractable is set (the game's reach + aim check) and at
 //   least one of its flat-screen interactions passes Available && CanPerform (the game's own test), or it
-//   is a dock whose CanDock accepts the held item (spoken as "Fits ..."). It
-//   flickers to none between frames (object-list run), so "out" waits for 0.5 s with nothing observed;
-//   moving straight from one object to another stays "in" and only the name is spoken.
+//   is a dock whose CanDock accepts the held item (spoken as "Fits ..."). Both tones play on the frame
+//   the state changes; moving straight from one object to another stays "in" and only the name is spoken.
 // - conversation answers: WorldUIManager.IsChoicesUiInRange() while answers are on screen (the box stays
 //   at the speaker: UIAnchorDialog.switchToPlayerWhenOutOfRange is 0 in SCN_Main).
 // Unity audio is disabled in this game (ProjectSettings/AudioManager.asset m_DisableAudio: 1), so the
 // tones are WAVs played from memory through winmm PlaySound.
 public sealed partial class KillerFrequencyAccessMod
 {
-    private const float ObservedOutOfRangeDelaySeconds = 0.5f;
     private const uint SndAsync = 0x0001;
     private const uint SndNoDefault = 0x0002;
     private const uint SndMemory = 0x0004;
@@ -30,7 +28,6 @@ public sealed partial class KillerFrequencyAccessMod
     private static readonly GCHandle OutOfRangeHandle = GCHandle.Alloc(OutOfRangeWav, GCHandleType.Pinned);
 
     private bool _objectInRange;
-    private float _lastObservedForRangeTime = -100f;
     private bool _choicesInRange;
 
     [DllImport("winmm.dll", SetLastError = true)]
@@ -45,22 +42,13 @@ public sealed partial class KillerFrequencyAccessMod
                 return;
             }
 
-            var now = Time.unscaledTime;
-            if (TryGetObservedInteractable(out var observed)
+            var objectInRange = TryGetObservedInteractable(out var observed)
                 && (HasPerformableInteraction(observed.transform)
-                    || (_placesForHeldIds.Contains(observed.transform.GetInstanceID()) && TryGetHeld(out var held, out _) && held != null)))
+                    || (_placesForHeldIds.Contains(observed.transform.GetInstanceID()) && TryGetHeld(out var held, out _) && held != null));
+            if (objectInRange != _objectInRange)
             {
-                _lastObservedForRangeTime = now;
-                if (!_objectInRange)
-                {
-                    _objectInRange = true;
-                    PlayRangeCue(true);
-                }
-            }
-            else if (_objectInRange && now - _lastObservedForRangeTime > ObservedOutOfRangeDelaySeconds)
-            {
-                _objectInRange = false;
-                PlayRangeCue(false);
+                _objectInRange = objectInRange;
+                PlayRangeCue(objectInRange);
             }
 
             var ui = TryGetWorldUi();
