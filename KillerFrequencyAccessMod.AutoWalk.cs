@@ -15,6 +15,11 @@ namespace Killer_Frequency_Access;
 /// - View: the game's CameraHandler.ResetToRotation (the CameraHandler under the player). The
 ///   game's look update owns the camera, so writing the camera transform directly is overwritten
 ///   (the rooms/held build: walks to small desk buttons never finished).
+/// - Where to stand: NavMesh points around the target from which, at the player's eye height, the
+///   target's collider is within its fsMaxReachDistance and a raycast with the game's interaction mask
+///   (ControllerBaseInteractor.raycastLayerMask) hits the target first. Tried nearest first; if the game
+///   does not observe the target after aiming from one, the next is tried. Before this (aiming-fix run)
+///   the walk aimed from wherever it was within 1.2 m and phone line buttons failed with "observes nothing".
 /// - Arrival: the game reports the target as observedInteractable and CanPerform is true for one
 ///   of its flat-screen interactions (or it is a dock that accepts the held item). The mod's own reach
 ///   estimate disagreed with the game in that run, so it no longer decides arrival.
@@ -28,7 +33,6 @@ public sealed partial class KillerFrequencyAccessMod
     private const int WalkMaxStuckReplans = 3;
     private const float AimDegreesPerSecond = 240f;
     private const float AimSettleDegrees = 2f;
-    private const float AimInchSpeed = 0.6f;
     private const float AimGiveUpSeconds = 4f;
     private const float NavMeshSampleMeters = 2f;
 
@@ -40,6 +44,10 @@ public sealed partial class KillerFrequencyAccessMod
     private int _walkStuckReplans;
     private bool _walkAiming;
     private float _walkAimStartTime;
+    private float _walkAimedTime = -1f;
+    private readonly List<Vector3> _walkStandpoints = new();
+    private int _walkStandpointIndex;
+    private const float AimObserveWaitSeconds = 1.0f;
 
     private void StartAutoWalkToSelectedTarget()
     {
@@ -73,6 +81,8 @@ public sealed partial class KillerFrequencyAccessMod
         _isAutoWalking = true;
         _walkAiming = false;
         _walkStuckReplans = 0;
+        FindStandpoints(origin, target);
+        _walkStandpointIndex = 0;
         if (!PlanWalk(origin.position, target, "start"))
         {
             StopAutoWalk($"no path to {name}");
@@ -93,7 +103,9 @@ public sealed partial class KillerFrequencyAccessMod
         _walkProgressPosition = from;
         _walkProgressTime = now;
 
-        var goal = GetNearestPoint(target, from);
+        var goal = _walkStandpointIndex < _walkStandpoints.Count
+            ? _walkStandpoints[_walkStandpointIndex]
+            : GetNearestPoint(target, from);
         if (!NavMesh.SamplePosition(from, out var startHit, NavMeshSampleMeters, NavMesh.AllAreas))
         {
             MelonLoader.MelonLogger.Msg($"[walk] {reason}: no NavMesh within {NavMeshSampleMeters} m of the player at {from}");
@@ -161,10 +173,9 @@ public sealed partial class KillerFrequencyAccessMod
             var camera = GetInteractorCamera();
             var cameraPosition = camera != null ? camera.transform.position : origin.position;
             var nearest = GetNearestPoint(target, cameraPosition);
-            var reach = TryGetGameInteractable(target, out var interactable) ? interactable.fsMaxReachDistance : 1.2f;
             var pathDone = _walkCornerIndex >= _walkCorners.Count;
 
-            if (_walkAiming || pathDone || PlanarDistance(origin.position, nearest) <= reach)
+            if (_walkAiming || pathDone)
             {
                 UpdateAiming(origin, target, deltaTime, now);
                 return;
@@ -222,37 +233,107 @@ public sealed partial class KillerFrequencyAccessMod
         }
     }
 
-    /// <summary>Near the target: turn the view to it through the game's camera, inching closer while the game does not observe it.</summary>
+    /// <summary>At the standing spot: turn the view to the target; if the game does not observe it, try the next spot.</summary>
     private void UpdateAiming(Transform origin, Transform target, float deltaTime, float now)
     {
         if (!_walkAiming)
         {
             _walkAiming = true;
             _walkAimStartTime = now;
-            MelonLoader.MelonLogger.Msg($"[walk] aiming at {GetSpokenName(target)}");
+            _walkAimedTime = -1f;
+            MelonLoader.MelonLogger.Msg($"[walk] aiming at {GetSpokenName(target)} from spot {_walkStandpointIndex + 1} of {_walkStandpoints.Count}");
         }
 
-        var aimPoint = ResolveInteractionAimPoint(target);
-        var remaining = AimAt(aimPoint, deltaTime);
-        if (remaining > AimSettleDegrees)
+        var remaining = AimAt(ResolveInteractionAimPoint(target), deltaTime);
+        if (remaining <= AimSettleDegrees && _walkAimedTime < 0f)
+        {
+            _walkAimedTime = now;
+        }
+
+        var aimedLongEnough = _walkAimedTime >= 0f && now - _walkAimedTime > AimObserveWaitSeconds;
+        var timedOut = now - _walkAimStartTime > AimGiveUpSeconds;
+        if (!aimedLongEnough && !timedOut)
         {
             return;
         }
 
-        if (now - _walkAimStartTime > AimGiveUpSeconds)
+        var observed = TryGetObservedInteractable(out var other) ? GetSpokenName(other) : "nothing";
+        var why = timedOut && !aimedLongEnough ? $"view did not settle ({remaining:0} degrees left)" : "aimed";
+        MelonLoader.MelonLogger.Msg($"[walk] spot {_walkStandpointIndex + 1} failed: {why}, game observes {observed}");
+        _walkStandpointIndex++;
+        if (_walkStandpointIndex < _walkStandpoints.Count)
         {
-            var observed = TryGetObservedInteractable(out var other) ? GetSpokenName(other) : "nothing";
-            StopAutoWalk($"aimed but not observed (game observes {observed})");
-            SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
+            _walkAiming = false;
+            if (PlanWalk(origin.position, target, $"next spot {_walkStandpointIndex + 1}"))
+            {
+                return;
+            }
+        }
+
+        StopAutoWalk($"no spot worked (game observes {observed})");
+        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
+    }
+
+    /// <summary>
+    /// NavMesh points around the target from which the target can be used, nearest to the player first.
+    /// From eye height (the player's current camera height above its feet) the target's nearest collider
+    /// point must be within fsMaxReachDistance, and a raycast toward the aim point with the game's
+    /// interaction mask must hit one of the target's own colliders.
+    /// </summary>
+    private void FindStandpoints(Transform origin, Transform target)
+    {
+        _walkStandpoints.Clear();
+        var camera = GetInteractorCamera();
+        if (camera == null || !TryGetGameInteractable(target, out var interactable))
+        {
             return;
         }
 
-        var toTarget = GetNearestPoint(target, origin.position) - origin.position;
-        toTarget.y = 0f;
-        if (toTarget.magnitude > 0.05f)
+        var eyeHeight = camera.transform.position.y - origin.position.y;
+        var aim = ResolveInteractionAimPoint(target);
+        var reach = interactable.fsMaxReachDistance;
+        int mask = Il2Cpp.ControllerBaseInteractor.raycastLayerMask.value;
+        var tested = 0;
+        for (var radius = 0.35f; radius <= reach + 0.01f; radius += 0.25f)
         {
-            MoveNavigationOrigin(origin, toTarget.normalized * Mathf.Min(AimInchSpeed * deltaTime, toTarget.magnitude));
+            for (var step = 0; step < 16; step++)
+            {
+                var angle = step * Mathf.PI * 2f / 16f;
+                var probe = new Vector3(aim.x + Mathf.Cos(angle) * radius, origin.position.y, aim.z + Mathf.Sin(angle) * radius);
+                if (!NavMesh.SamplePosition(probe, out var hit, 0.5f, NavMesh.AllAreas))
+                {
+                    continue;
+                }
+
+                var spot = hit.position;
+                if (_walkStandpoints.Exists(p => Vector3.Distance(p, spot) < 0.2f))
+                {
+                    continue;
+                }
+
+                tested++;
+                var eye = spot + Vector3.up * eyeHeight;
+                if (Vector3.Distance(eye, GetNearestPoint(target, eye)) > reach)
+                {
+                    continue;
+                }
+
+                var toAim = aim - eye;
+                if (!Physics.Raycast(eye, toAim.normalized, out var rayHit, toAim.magnitude + 0.3f, mask)
+                    || rayHit.collider == null
+                    || !TryGetGameInteractable(rayHit.collider.transform, out var hitInteractable)
+                    || hitInteractable.GetInstanceID() != interactable.GetInstanceID())
+                {
+                    continue;
+                }
+
+                _walkStandpoints.Add(spot);
+            }
         }
+
+        var from = origin.position;
+        _walkStandpoints.Sort((a, b) => PlanarDistance(from, a).CompareTo(PlanarDistance(from, b)));
+        MelonLoader.MelonLogger.Msg($"[walk] {_walkStandpoints.Count} usable spots for {GetSpokenName(target)} ({tested} NavMesh points tested, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
     }
 
     /// <summary>
