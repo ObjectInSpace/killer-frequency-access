@@ -128,7 +128,18 @@ Commit straight to master; no branches while the mod is unreleased.
   keyboard bridge" that added a virtual gamepad, injected d-pad/A taps and UI move/submit events on
   arrow keys, Enter and 1-8 / numpad 1-8, on top of the game's own UI Navigate/Submit bindings
   (arrows, WASD, d-pad, sticks, Enter). Removed entirely; the mod now only reads keys, never injects.
-- 2026-11-04, eye-height/no-injection build: installed, not yet run.
+- 2026-11-04, eye-height/no-injection build: dialog choices work on d-pad only while near and facing
+  the speaker; keyboard does nothing. Explained by the rip: `UIAnchorDialog.switchToPlayerWhenOutOfRange`
+  is 0 in SCN_Main, so the choice box stays at the speaker's `DialogAnchor` and hides out of range;
+  4 anchors have `_disconnectIfNotFacing` 1. `UI/Navigate_InGame` has keyboard Arrows/WSAD composites
+  with no parts, so only d-pad and joystick are bound, and it isn't in the rebind menu. Arrows and WASD
+  both bind `Gameplay/Move`; the user's `BindingOverrides` is empty. The Debug map (numpad 0-9 events,
+  F5/F9, number row 1-3 Test, right Ctrl / d-pad down SkipDialogue, F4 free cam) has no
+  DebugManager or DebugMenu placed in any scene or prefab, test scenes included.
+- 2026-11-04, input-diagnostics build (`KillerFrequencyAccessMod.InputDiagnostics.cs`, read-only):
+  `[inputdiag]` logs `Debug.isDebugBuild`, every enabled map/action on change with runtime bindings
+  for Debug, Navigate, Navigate_InGame, Submit and Move, dialogue active/choice key changes, and
+  whether the player moves 0.3 m or more while a choice is up. Installed, not yet run.
 
 Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
 `NavMesh.CalculatePath` is unusable; the route is an A* over a 0.5 m lattice of
