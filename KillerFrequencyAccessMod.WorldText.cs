@@ -123,6 +123,10 @@ public sealed partial class KillerFrequencyAccessMod
             }
         }
 
+        // Left inspect display before the right one: on an open spread the left page comes first. The
+        // user heard the right page (STEP 4-5) before the left (STEP 1-3) when both showed together.
+        var left = _inspectDetector?.leftDisplay;
+        _diegeticDisplays.Sort((a, b) => (b == left).CompareTo(a == left));
         foreach (var display in _diegeticDisplays)
         {
             if (display == null)
@@ -138,14 +142,13 @@ public sealed partial class KillerFrequencyAccessMod
             }
         }
 
-        LogInspectedPages();
+        LogInspectedPageList();
     }
 
     private Il2Cpp.FsInspectDiegeticTextDetector? _inspectDetector;
     private int _lastInspectedPageCount = -1;
-
-    /// <summary>Logs how many text pages the inspected item has and which one the game observes, on change.</summary>
-    private void LogInspectedPages()
+    /// <summary>Logs how many text pages the inspected item has, on change.</summary>
+    private void LogInspectedPageList()
     {
         if (_inspectDetector == null)
         {
