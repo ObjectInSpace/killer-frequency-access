@@ -7,7 +7,9 @@ namespace Killer_Frequency_Access;
 
 // Range cue: a rising tone when something becomes usable, a falling tone when it stops being usable.
 // "Usable" is the game's own test, not a distance the mod picks:
-// - objects: ControllerBaseInteractor.observedInteractable is set (the game's reach + aim check). It
+// - objects: ControllerBaseInteractor.observedInteractable is set (the game's reach + aim check) and at
+//   least one of its flat-screen interactions passes Available && CanPerform (the game's own test), or it
+//   is a dock whose CanDock accepts the held item (spoken as "Fits ..."). It
 //   flickers to none between frames (object-list run), so "out" waits for 0.5 s with nothing observed;
 //   moving straight from one object to another stays "in" and only the name is spoken.
 // - conversation answers: WorldUIManager.IsChoicesUiInRange() while answers are on screen (the box stays
@@ -44,7 +46,9 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var now = Time.unscaledTime;
-            if (TryGetObservedInteractable(out _))
+            if (TryGetObservedInteractable(out var observed)
+                && (HasPerformableInteraction(observed.transform)
+                    || (_placesForHeldIds.Contains(observed.transform.GetInstanceID()) && TryGetHeld(out var held, out _) && held != null)))
             {
                 _lastObservedForRangeTime = now;
                 if (!_objectInRange)
