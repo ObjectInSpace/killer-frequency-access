@@ -85,6 +85,11 @@ public sealed partial class KillerFrequencyAccessMod
 
         _lastObservedSeenTime = now;
         var observedId = observed.GetInstanceID();
+        if (observedId != _lastObservedInteractableObjectId)
+        {
+            SetListContextLookedAt(observed.transform);
+        }
+
         if (observedId == _lastObservedInteractableObjectId
             || now - _lastObservedInteractableSpeakTime < ObservedInteractableSpeakCooldownSeconds)
         {

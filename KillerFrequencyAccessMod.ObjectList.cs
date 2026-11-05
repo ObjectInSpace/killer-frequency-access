@@ -111,6 +111,13 @@ public sealed partial class KillerFrequencyAccessMod
     private List<Transform>? _itemsMemo;
     private int _itemsMemoEntryId;
 
+    // Player context (user request 2026-11-05), applied at the next list key: entering a room lists its
+    // objects; looking at an object selects it, and a container (or a part of one) lists its contents.
+    private enum ListContext { None, EnteredRoom, LookedAt }
+    private ListContext _pendingContext;
+    private int _contextRootId;
+    private int _contextItemId;
+
     private string _lastPlayerRoomName = string.Empty;
     private float _nextPlayerRoomCheckTime;
 
@@ -127,6 +134,16 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         RebuildObjectIndex();
+        var atStart = ApplyPendingContext();
+        if (atStart && (previous || next))
+        {
+            // The context just reset the list to its start: read that entry instead of skipping past it.
+            SpeakSelectionText(_listLevel == ListLevel.Contents
+                ? $"In {SelectedEntry()?.Name ?? "nothing"}. {DescribeItem()}"
+                : $"Objects in {SelectedRoomName()}. {DescribeEntry()}");
+            return true;
+        }
+
         if (up)
         {
             MoveLevel(-1);
@@ -141,6 +158,55 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         return true;
+    }
+
+    /// <summary>Called when the game starts reporting a new observed interactable.</summary>
+    private void SetListContextLookedAt(Transform observed)
+    {
+        var root = FindContainerRoot(observed);
+        _pendingContext = ListContext.LookedAt;
+        _contextRootId = root.GetInstanceID();
+        _contextItemId = root == observed ? -1 : observed.GetInstanceID();
+    }
+
+    /// <summary>Applies the latest context. Returns true when it left the list at the start of a group.</summary>
+    private bool ApplyPendingContext()
+    {
+        var context = _pendingContext;
+        _pendingContext = ListContext.None;
+        if (context == ListContext.None)
+        {
+            return false;
+        }
+
+        _selectedRoomId = -1;
+        _roomIndex = 0;
+        _entriesMemo = null;
+        _itemsMemo = null;
+        _selectedItemId = -1;
+        if (context == ListContext.EnteredRoom)
+        {
+            _listLevel = ListLevel.Objects;
+            _selectedEntryId = -1;
+            return true;
+        }
+
+        // Looked at: select the object (or its container) in the player's room; a container lists its contents.
+        if (!_entriesById.TryGetValue(_contextRootId, out var entry) || !CurrentEntries().Exists(e => e.Id == entry.Id))
+        {
+            return false;
+        }
+
+        _selectedEntryId = entry.Id;
+        _listLevel = ListLevel.Objects;
+        if (!entry.IsClosed && CurrentItems().Count > 0)
+        {
+            _listLevel = ListLevel.Contents;
+            _selectedItemId = _contextItemId;
+            return _contextItemId == -1;
+        }
+
+        return false;
     }
 
     private void MoveLevel(int direction)
@@ -793,6 +859,7 @@ public sealed partial class KillerFrequencyAccessMod
         if (name.Length > 0)
         {
             SpeakSelectionText(name);
+            _pendingContext = ListContext.EnteredRoom;
         }
     }
 }
