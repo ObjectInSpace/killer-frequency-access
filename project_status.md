@@ -29,20 +29,26 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   the target as observed; "in reach" is the camera within the target's `fsMaxReachDistance` of
   its nearest `m_Colliders` entry.
 
-`KillerFrequencyAccessMod.ObjectList.cs` (object list, modelled on Date Everything Access's picker):
-- O opens or closes it. Page Up / Page Down move, Enter goes in (rooms, then categories, then
-  objects), Backspace goes back a level (closes at the top). Choosing an object sets the room and
-  category that `[` / `]` cycle through; Backspace with the list closed still auto-walks.
-  Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
+`KillerFrequencyAccessMod.ObjectList.cs` (object list, user design 2026-11-05, always on outside menus):
+- Home / End move between levels: rooms, then what stands on its own in the room (devices, drawers,
+  doors, docks, loose objects), then what is in or on that entry. Page Up / Page Down move along the
+  level; Backspace walks to the entry (a device's first part). O, Enter, `[` / `]` and categories are
+  gone. Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
 - Rooms: the game's 25 `Il2Cpp.Room`s. `Room.volumes` is empty at runtime, so a room's space is
-  the Unity `OcclusionArea` boxes on its children (offline check `tools\rip\room_check.py`: 797 of
-  804 SCN_Main objects fall in a room). Name = floor folder + room object ("Ground Floor Break Room"). Room levels: current room (follows
-  the player), all rooms, each room. Entering a room is announced.
-- Categories: the game's component on the object, first match wins: story items
-  (`StoryObjectCheckpoint`, or `PhysicsHoldable.onHeldStoryEvents` set), collectables
-  (`CollectInteraction`), doors, drawers, buttons, sliders, cassettes, floppy disks, records, fuses,
-  tray items (`DockableInTray`), pinboard items, sticky notes, holders, objects (`PhysicsHoldable`), other.
-- No cap on the cycle list (it was the 14 nearest objects). Each entry says "N of M".
+  the Unity `OcclusionArea` boxes on its children (offline check `toolsipoom_check.py`: 797 of
+  804 SCN_Main objects fall in a room). Name = floor folder + room object ("Ground Floor Break Room").
+  The first room entry is the player's room and follows them. Entering a room is announced.
+- Doors: `Il2Cpp.RoomPortalDoor` (_door, _frontRoom, _backRoom, isOpen) lists the 16 room doors in
+  both rooms they join, announced as "door, to <room>". Before, one point decided an object's room,
+  and the studio door's pivot lies 0.6 m inside the Green Room box (rip), so only the Green Room had it.
+  The other 43 DoorOpenables belong to cabinets, the fridge, the safe, sinks, stalls and dumpsters.
+- Containment: the outermost ancestor that is an Interactable, an `Openable` or a device component
+  (VinylPlayer, CassettePlayer, Dictaphone, SoundBoard, FuseBox, NumericKeypad, HandheldRadio,
+  FloppyDiskComputer, Lever, Board). The studio's phone-line buttons sit on `P_HeroProp_ConsoleMixer_05`,
+  which has no component, so they are their own entries next to the soundboard (a part of that console).
+- Hidden: a room's contents while the player is elsewhere and all its doorways are closed (its doors
+  stay; a plain `RoomPortal` is always open), and anything below a closed `Openable`. Loose items in
+  cabinets and the fridge are not children of them (rip: no slots), so they are still listed.
 - Actions spoken for the object you point at use `CanPerform(interactor)` (first run: `Available`
   was true for drop and throw on items not held), each with its keys read live from the game's
   `InputActions` asset ("pick up, left click or numpad 0"). Interactions with no

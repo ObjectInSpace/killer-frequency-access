@@ -14,8 +14,6 @@ public sealed partial class KillerFrequencyAccessMod
     {
         try
         {
-            var now = Time.unscaledTime;
-            var handledNavigationInput = false;
             if (IsMenuActive())
             {
                 if (_isAutoWalking)
@@ -23,60 +21,17 @@ public sealed partial class KillerFrequencyAccessMod
                     StopAutoWalk(false);
                 }
 
-                if (_isObjectListOpen)
-                {
-                    CloseObjectList(string.Empty);
-                }
-
                 return;
             }
 
             if (HandleObjectListKeys())
             {
-                MarkNavigationInteractionActive();
                 return;
-            }
-
-            if (IsCyclePreviousPressed())
-            {
-                MarkNavigationInteractionActive();
-                if (_reachableTargets.Count == 0 && CanRunOnDemandTargetRefresh(now))
-                {
-                    RefreshReachableTargets(allowSlowFallback: false);
-                    if (_reachableTargets.Count < 4 && CanRunSlowNavigationFallback(now))
-                    {
-                        RefreshReachableTargets(allowSlowFallback: true);
-                    }
-                }
-                CycleTarget(-1);
-                handledNavigationInput = true;
-            }
-            else if (IsCycleNextPressed())
-            {
-                MarkNavigationInteractionActive();
-                if (_reachableTargets.Count == 0 && CanRunOnDemandTargetRefresh(now))
-                {
-                    RefreshReachableTargets(allowSlowFallback: false);
-                    if (_reachableTargets.Count < 4 && CanRunSlowNavigationFallback(now))
-                    {
-                        RefreshReachableTargets(allowSlowFallback: true);
-                    }
-                }
-                CycleTarget(1);
-                handledNavigationInput = true;
             }
 
             if (IsAutoWalkPressed())
             {
-                MarkNavigationInteractionActive();
                 StartAutoWalkToSelectedTarget();
-                handledNavigationInput = true;
-            }
-
-            if (!handledNavigationInput && ShouldRunNavigationBackgroundRefresh(now))
-            {
-                RefreshReachableTargets(allowSlowFallback: false);
-                _nextTargetBackgroundRefreshTime = now + TargetBackgroundRefreshSeconds;
             }
         }
         catch (Exception ex)
@@ -102,117 +57,6 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         origin.position += worldDelta;
-    }
-
-    private void RefreshReachableTargets(bool forceComponentCacheRefresh = false, bool allowSlowFallback = false)
-    {
-        var timer = Stopwatch.StartNew();
-        try
-        {
-            var previousId = (_selectedTargetIndex >= 0 && _selectedTargetIndex < _reachableTargets.Count)
-                ? _reachableTargets[_selectedTargetIndex].ObjectId
-                : -1;
-            _reachableTargets.Clear();
-
-            if (!TryGetNavigationOrigin(out var origin))
-            {
-                _selectedTargetIndex = -1;
-                if (!_loggedMissingOrigin)
-                {
-                    _loggedMissingOrigin = true;
-                    LoggerInstance.Warning("[targets] no navigation origin: no ControllerBaseInteractor in the loaded scenes");
-                }
-                return;
-            }
-
-            var originPosition = origin.position;
-            var candidateByObjectId = new Dictionary<int, Transform>();
-            CollectGameInteractables(candidateByObjectId);
-
-            // Every object that passes the object-list filter (room and category); no count cap.
-            foreach (var targetTransform in candidateByObjectId.Values)
-            {
-                if (targetTransform == null
-                    || !targetTransform.gameObject.activeInHierarchy
-                    || !MatchesActiveFilter(targetTransform, originPosition))
-                {
-                    continue;
-                }
-
-                if (TryCreateNearbyTarget(originPosition, targetTransform, out var target))
-                {
-                    _reachableTargets.Add(target);
-                }
-            }
-
-            _reachableTargets.Sort((a, b) => a.DistanceMeters.CompareTo(b.DistanceMeters));
-
-            if (_reachableTargets.Count == 0)
-            {
-                _selectedTargetIndex = -1;
-                return;
-            }
-
-            if (_pendingSelectObjectId != -1)
-            {
-                previousId = _pendingSelectObjectId;
-                _pendingSelectObjectId = -1;
-            }
-
-            _selectedTargetIndex = 0;
-            if (previousId != -1)
-            {
-                for (var i = 0; i < _reachableTargets.Count; i++)
-                {
-                    if (_reachableTargets[i].ObjectId == previousId)
-                    {
-                        _selectedTargetIndex = i;
-                        break;
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LoggerInstance.Warning($"Target refresh failed: {ex.Message}");
-            _reachableTargets.Clear();
-            _selectedTargetIndex = -1;
-        }
-        finally
-        {
-            _lastReachableTargetsRefreshTime = Time.unscaledTime;
-            timer.Stop();
-            RecordTargetRefreshMetrics(timer.Elapsed.TotalMilliseconds);
-        }
-    }
-
-    private static bool TryCreateNearbyTarget(Vector3 origin, Transform candidate, out ReachableTarget target)
-    {
-        target = default;
-        if (candidate == null)
-        {
-            return false;
-        }
-
-        var nearest = ResolveTargetProximityPoint(origin, candidate);
-        if (!IsFiniteVector3(nearest))
-        {
-            return false;
-        }
-
-        var distance = Vector2.Distance(new Vector2(origin.x, origin.z), new Vector2(nearest.x, nearest.z));
-        target = new ReachableTarget(candidate.GetInstanceID(), candidate, GetSpokenName(candidate), nearest, distance);
-        return true;
-    }
-
-    private static string ResolveReachableTargetDisplayName(ReachableTarget target)
-    {
-        return target.DisplayName;
-    }
-
-    private static Vector3 ResolveTargetProximityPoint(Vector3 originPosition, Transform target)
-    {
-        return GetNearestPoint(target, originPosition);
     }
 
     private Vector3 ResolveInteractionAimPoint(Transform target)
@@ -293,63 +137,6 @@ public sealed partial class KillerFrequencyAccessMod
         return height.Length == 0 ? text : $"{text}, {height}";
     }
 
-    private void CycleTarget(int direction)
-    {
-        if (_reachableTargets.Count == 0)
-        {
-            SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
-            return;
-        }
-
-        var count = _reachableTargets.Count;
-        if (_selectedTargetIndex < 0)
-        {
-            _selectedTargetIndex = 0;
-        }
-
-        var now = Time.unscaledTime;
-        for (var attempts = 0; attempts < count; attempts++)
-        {
-            _selectedTargetIndex = (_selectedTargetIndex + direction + count) % count;
-            var target = _reachableTargets[_selectedTargetIndex];
-            if (target.Transform == null || !target.Transform.gameObject.activeInHierarchy)
-            {
-                continue;
-            }
-
-            if (IsTemporarilyUnreachableTarget(target.ObjectId, now))
-            {
-                continue;
-            }
-
-            AnnounceTargetSelection(target);
-            return;
-        }
-
-        SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
-    }
-
-    private bool IsTemporarilyUnreachableTarget(int objectId, float now)
-    {
-        if (!_temporarilyUnreachableTargetUntil.TryGetValue(objectId, out var untilTime))
-        {
-            return false;
-        }
-
-        if (now >= untilTime)
-        {
-            _temporarilyUnreachableTargetUntil.Remove(objectId);
-            return false;
-        }
-
-        return true;
-    }
-
-    private void MarkTemporarilyUnreachableTarget(int objectId, float now)
-    {
-        _temporarilyUnreachableTargetUntil[objectId] = now + UnreachableTargetRetrySeconds;
-    }
-
     private static bool TryHasDirectNavPath(Vector3 from, Vector3 to)
     {
         if (!NavMesh.SamplePosition(from, out var startHit, 4f, NavMesh.AllAreas))
@@ -391,41 +178,9 @@ public sealed partial class KillerFrequencyAccessMod
         return true;
     }
 
-    private static bool IsCyclePreviousPressed()
-    {
-        return IsKeyDownSafe(Key.LeftBracket);
-    }
-
-    private static bool IsCycleNextPressed()
-    {
-        return IsKeyDownSafe(Key.RightBracket);
-    }
-
     private static bool IsAutoWalkPressed()
     {
         return IsKeyDownSafe(Key.Backspace);
-    }
-
-    private void AnnounceTargetSelection(ReachableTarget target)
-    {
-        var displayName = ResolveReachableTargetDisplayName(target);
-        if (!TryGetNavigationOrigin(out var origin))
-        {
-            SpeakSelectionText(displayName);
-            return;
-        }
-
-        var point = target.Transform != null ? GetNearestPoint(target.Transform, origin.position) : target.Destination;
-        var where = DescribeWhere(origin, point);
-        var position = $"{_selectedTargetIndex + 1} of {_reachableTargets.Count}";
-        if (_filterScope == RoomScope.AllRooms && target.Transform != null)
-        {
-            var room = RoomOf(target.Transform.position);
-            SpeakSelectionText($"{displayName}, {where}, {room?.Name ?? "no room"}, {position}");
-            return;
-        }
-
-        SpeakSelectionText($"{displayName}, {where}, {position}");
     }
 
     private static string DescribeDirectionRelativeTo(Transform origin, Vector3 destination)
@@ -467,22 +222,5 @@ public sealed partial class KillerFrequencyAccessMod
             && !float.IsInfinity(value.z);
     }
 
-    private readonly struct ReachableTarget
-    {
-        public ReachableTarget(int objectId, Transform transform, string displayName, Vector3 destination, float distanceMeters)
-        {
-            ObjectId = objectId;
-            Transform = transform;
-            DisplayName = displayName;
-            Destination = destination;
-            DistanceMeters = distanceMeters;
-        }
-
-        public int ObjectId { get; }
-        public Transform Transform { get; }
-        public string DisplayName { get; }
-        public Vector3 Destination { get; }
-        public float DistanceMeters { get; }
-    }
 }
 

@@ -51,20 +51,16 @@ public sealed partial class KillerFrequencyAccessMod
 
     private void StartAutoWalkToSelectedTarget()
     {
-        if (_reachableTargets.Count == 0 || _selectedTargetIndex < 0 || _selectedTargetIndex >= _reachableTargets.Count)
+        var target = GetListWalkTarget();
+        if (target == null)
         {
-            RefreshReachableTargets();
-        }
-
-        if (_reachableTargets.Count == 0)
-        {
-            SpeakSelectionText($"Nothing listed: {DescribeActiveFilter()}");
+            SpeakSelectionText(_listLevel == ListLevel.Rooms
+                ? "Choose an object first: End lists the objects in the room"
+                : "Nothing selected to walk to");
             return;
         }
 
-        _selectedTargetIndex = Mathf.Clamp(_selectedTargetIndex, 0, _reachableTargets.Count - 1);
-        var target = _reachableTargets[_selectedTargetIndex].Transform;
-        if (target == null || !TryGetNavigationOrigin(out var origin))
+        if (!TryGetNavigationOrigin(out var origin))
         {
             SpeakSelectionText("Player position unavailable");
             return;

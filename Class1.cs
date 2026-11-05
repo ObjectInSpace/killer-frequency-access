@@ -17,44 +17,19 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
 {
     private const float SelectionSpeakDebounceSeconds = 0.18f;
     private const float ObservedInteractableSpeakCooldownSeconds = 0.2f;
-    private const float TargetRefreshDebounceSeconds = 0.25f;
-    private const float SlowNavigationFallbackCooldownSeconds = 0.9f;
-    private const float UnreachableTargetRetrySeconds = 2.0f;
-    private const float TargetBackgroundRefreshSeconds = 8.0f;
-    private const float TargetNavigationActivityWindowSeconds = 12.0f;
-    private const float TargetListFreshnessSeconds = 1.25f;
-    private const int MaxWalkableTargetsPerRefresh = 14;
-    private const int MaxPathValidationAttemptsPerRefresh = 24;
-    private const float CurrentRoomMaxVerticalDeltaMeters = 5.5f;
-    private const int MaxCurrentRoomTargetCandidates = 40;
     private const float AutoWalkSpeed = 3.3f;
     private const float AutoTurnDegreesPerSecond = 300f;
     private const float InteractionHorizontalToleranceDegrees = 15f;
     private const float InteractionVerticalToleranceDegrees = 12f;
-    private const float TargetComponentCacheRefreshGameplaySeconds = 2.0f;
-    private const float TargetComponentCacheRefreshStudioSeconds = 4.0f;
-    private const float TargetRefreshWarnThresholdMs = 12f;
-    private const float PerfWarnCooldownSeconds = 5f;
 
-    private readonly List<ReachableTarget> _reachableTargets = new();
-    private readonly Dictionary<int, float> _temporarilyUnreachableTargetUntil = new();
     private readonly List<MonoBehaviour> _cachedNavigationComponents = new();
     private readonly Collider[] _nearbyInteractionColliderBuffer = new Collider[768];
     private float _nextNavigationComponentCacheRefreshTime = -100f;
-    private float _nextTargetBackgroundRefreshTime = -100f;
-    private float _lastTargetRefreshRequestTime = -100f;
-    private float _nextSlowNavigationFallbackTime = -100f;
-    private float _lastReachableTargetsRefreshTime = -100f;
-    private float _lastNavigationInteractionTime = -100f;
-    private float _nextTargetRefreshWarnTime = -100f;
     private bool _isAutoWalking;
-    private int _selectedTargetIndex = -1;
     private int _lastObservedInteractableObjectId = -1;
     private string _lastSelectionSpeechKey = string.Empty;
     private float _lastSelectionSpeechTime = -100f;
     private float _lastObservedInteractableSpeakTime = -100f;
-    private int _targetRefreshPassCount;
-    private float _targetRefreshTotalMilliseconds;
     private Transform? _autoWalkTarget;
 
     public override void OnInitializeMelon()
@@ -82,55 +57,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     {
         SpeechRouter.Shutdown();
     }
-
-    private void RecordTargetRefreshMetrics(double elapsedMs)
-    {
-        _targetRefreshPassCount++;
-        _targetRefreshTotalMilliseconds += (float)elapsedMs;
-        if (elapsedMs > TargetRefreshWarnThresholdMs && Time.unscaledTime >= _nextTargetRefreshWarnTime)
-        {
-            LoggerInstance.Warning($"Target refresh cost {elapsedMs:0.00} ms");
-            _nextTargetRefreshWarnTime = Time.unscaledTime + PerfWarnCooldownSeconds;
-        }
-    }
-
-    private void MarkNavigationInteractionActive()
-    {
-        _lastNavigationInteractionTime = Time.unscaledTime;
-    }
-
-    private bool ShouldRunNavigationBackgroundRefresh(float now)
-    {
-        if (now < _nextTargetBackgroundRefreshTime)
-        {
-            return false;
-        }
-
-        return now - _lastNavigationInteractionTime <= TargetNavigationActivityWindowSeconds;
-    }
-
-    private bool CanRunOnDemandTargetRefresh(float now)
-    {
-        if (now - _lastTargetRefreshRequestTime < TargetRefreshDebounceSeconds)
-        {
-            return false;
-        }
-
-        _lastTargetRefreshRequestTime = now;
-        return true;
-    }
-
-    private bool CanRunSlowNavigationFallback(float now)
-    {
-        if (now < _nextSlowNavigationFallbackTime)
-        {
-            return false;
-        }
-
-        _nextSlowNavigationFallbackTime = now + SlowNavigationFallbackCooldownSeconds;
-        return true;
-    }
-
 
     private void SpeakSelectionText(string text)
     {

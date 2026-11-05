@@ -391,15 +391,11 @@ public sealed partial class KillerFrequencyAccessMod
             var names = places.ConvertAll(t => GetSpokenName(t));
             text += places.Count <= 3
                 ? $". Fits {string.Join(", ", names)}"
-                : $". Fits {places.Count} places, see the object list";
+                : $". Fits {places.Count} places";
             text += $". To put it in, aim at it and {DescribePlaceKeys()}";
         }
 
         SpeakSelectionText(text);
-        if (_isObjectListOpen)
-        {
-            TakeListSnapshot();
-        }
     }
 
     private static string DescribePlaceKeys()
