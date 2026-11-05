@@ -12,7 +12,7 @@ namespace Killer_Frequency_Access;
 ///   over a 0.5 m lattice where each node is NavMesh.SamplePosition and each step must pass
 ///   NavMesh.Raycast (no NavMesh edge between the two points), then shortened with the same raycast.
 ///   Followed corner by corner with the player's CharacterController.
-/// - View: the game's CameraHandler.ResetToRotation (FlatScreenPlayer.instance._cameraHandler). The
+/// - View: the game's CameraHandler.ResetToRotation (the CameraHandler under the player). The
 ///   game's look update owns the camera, so writing the camera transform directly is overwritten
 ///   (the rooms/held build: walks to small desk buttons never finished).
 /// - Arrival: the game reports the target as observedInteractable and CanPerform is true for one
@@ -255,7 +255,10 @@ public sealed partial class KillerFrequencyAccessMod
         }
     }
 
-    /// <summary>Turns the view toward a point through the game's camera handler. Returns the degrees left to turn.</summary>
+    /// <summary>
+    /// Turns the view toward a point. Returns the degrees still between the camera's actual rotation
+    /// and the point (measured before this frame's turn, so a turn the game ignores is not counted).
+    /// </summary>
     private static float AimAt(Vector3 point, float deltaTime)
     {
         var camera = GetInteractorCamera();
@@ -272,9 +275,9 @@ public sealed partial class KillerFrequencyAccessMod
 
         var desired = Quaternion.LookRotation(direction.normalized, Vector3.up);
         var current = camera.transform.rotation;
-        var next = Quaternion.RotateTowards(current, desired, AimDegreesPerSecond * deltaTime);
-        SetViewRotation(next);
-        return Quaternion.Angle(next, desired);
+        var remaining = Quaternion.Angle(current, desired);
+        SetViewRotation(Quaternion.RotateTowards(current, desired, AimDegreesPerSecond * deltaTime), remaining);
+        return remaining;
     }
 
     /// <summary>Turns the view level toward a horizontal direction while walking.</summary>
@@ -286,22 +289,93 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
+        var current = camera.transform.rotation;
         var desired = Quaternion.LookRotation(planarDirection.normalized, Vector3.up);
-        SetViewRotation(Quaternion.RotateTowards(camera.transform.rotation, desired, AutoTurnDegreesPerSecond * deltaTime));
+        SetViewRotation(Quaternion.RotateTowards(current, desired, AutoTurnDegreesPerSecond * deltaTime), Quaternion.Angle(current, desired));
     }
 
-    /// <summary>The game's CameraHandler.ResetToRotation; logged once if it is unavailable.</summary>
-    private static void SetViewRotation(Quaternion rotation)
+    private static Il2Cpp.CameraHandler? _cameraHandler;
+    private static bool _viewUseTransforms;
+    private static float _viewCheckStartTime = -1f;
+    private static float _viewCheckStartAngle;
+
+    /// <summary>
+    /// The player's CameraHandler. In the rip it sits on PlayerController/CameraJoint/CameraFirstPerson,
+    /// a child of the interactor's GameObject; FlatScreenPlayer._cameraHandler is not serialized and was
+    /// null at runtime (auto-walk/controller run).
+    /// </summary>
+    private static Il2Cpp.CameraHandler? GetCameraHandler()
     {
-        var player = Il2Cpp.FlatScreenPlayer.instance;
-        var handler = player == null ? null : player._cameraHandler;
+        if (_cameraHandler != null)
+        {
+            return _cameraHandler;
+        }
+
+        if (TryGetPlayerInteractor(out var interactor))
+        {
+            _cameraHandler = interactor.GetComponentInChildren<Il2Cpp.CameraHandler>(true);
+        }
+
+        if (_cameraHandler == null)
+        {
+            _cameraHandler = UnityEngine.Object.FindObjectOfType<Il2Cpp.CameraHandler>();
+        }
+
+        LogOnce($"walk-camera-handler|{(_cameraHandler == null ? "none" : _cameraHandler.name)}",
+            _cameraHandler == null ? "[walk] no CameraHandler found; cannot turn the view" : $"[walk] view turns through CameraHandler on {BuildHierarchyPath(_cameraHandler.transform)}");
+        return _cameraHandler;
+    }
+
+    /// <summary>
+    /// Sets the view through CameraHandler.ResetToRotation. If the camera has not turned at all after a
+    /// second of asking, switches (once, logged) to the transforms the handler drives: playerBody for
+    /// yaw, cameraHinge for pitch.
+    /// </summary>
+    private static void SetViewRotation(Quaternion rotation, float remainingDegrees)
+    {
+        var handler = GetCameraHandler();
         if (handler == null)
         {
-            LogOnce("walk-no-camera-handler", "[walk] FlatScreenPlayer.instance._cameraHandler is null; cannot turn the view");
             return;
         }
 
-        handler.ResetToRotation(rotation);
+        if (!_viewUseTransforms)
+        {
+            handler.ResetToRotation(rotation);
+            var now = Time.unscaledTime;
+            if (remainingDegrees < 5f)
+            {
+                _viewCheckStartTime = -1f;
+            }
+            else if (_viewCheckStartTime < 0f)
+            {
+                _viewCheckStartTime = now;
+                _viewCheckStartAngle = remainingDegrees;
+            }
+            else if (now - _viewCheckStartTime > 1f)
+            {
+                if (remainingDegrees > _viewCheckStartAngle - 1f)
+                {
+                    _viewUseTransforms = true;
+                    MelonLoader.MelonLogger.Msg($"[walk] ResetToRotation did not turn the view in 1 s ({_viewCheckStartAngle:0} to {remainingDegrees:0} degrees); using playerBody and cameraHinge");
+                }
+
+                _viewCheckStartTime = -1f;
+            }
+
+            return;
+        }
+
+        var euler = rotation.eulerAngles;
+        if (handler.playerBody != null)
+        {
+            handler.playerBody.rotation = Quaternion.Euler(0f, euler.y, 0f);
+        }
+
+        if (handler.cameraHinge != null)
+        {
+            handler.cameraHinge.localRotation = Quaternion.Euler(euler.x, 0f, 0f);
+        }
     }
 
     /// <summary>The game observes the target and can perform one of its actions (or it is a dock that accepts the held item).</summary>
