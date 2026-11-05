@@ -376,6 +376,37 @@ public sealed partial class KillerFrequencyAccessMod
         return TryGetGameInteractable(target, out var interactable) ? GetPerformableVerbs(interactable) : new List<string>();
     }
 
+    /// <summary>Whether the game's CanPerform says any flat-screen interaction on the target can run now. No logging.</summary>
+    private static bool HasPerformableInteraction(Transform target)
+    {
+        if (!TryGetGameInteractable(target, out var interactable) || !TryGetPlayerInteractor(out var interactor))
+        {
+            return false;
+        }
+
+        foreach (var interaction in interactable.GetComponents<GameInteraction>())
+        {
+            if (interaction == null || !interaction.enabled || !HasFlatScreenInput(interaction))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (interaction.Available && interaction.CanPerform(interactor))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Logged by GetPerformableVerbs when the object is announced.
+            }
+        }
+
+        return false;
+    }
+
     private static bool HasAvailableInteraction(Transform target)
     {
         return GetAvailableVerbs(target).Count > 0;

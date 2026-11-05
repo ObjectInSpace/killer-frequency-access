@@ -113,7 +113,25 @@ Commit straight to master; no branches while the mod is unreleased.
   Causes: the turntable was named "dock vinyl holder"; the mod never said what was held, where it
   fits, or which key places it; the microphone was announced 12 times in 5 s (observed flicker);
   every desk distance was "1 meters".
-- 2026-11-04, rooms/held items/keys build: installed, not yet run.
+- 2026-11-04, rooms/held items/keys build: rooms worked (25 rooms with areas). Record placed on the
+  record player (`[performing] FsPlaceInteraction`, held fits 3 of 58 docks). Auto-walk to the small
+  record player buttons never finished: the game reported the button observed with `UseInteraction=yes`
+  while the mod's reach check still said no, and the camera writes were overwritten by the game's look
+  update. Keys were spoken for keyboard and mouse while the user played on a controller.
+- 2026-11-04, auto-walk/controller build: installed, not yet run.
+
+Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
+`NavMesh.CalculatePath` is unusable; the route is an A* over a 0.5 m lattice of
+`NavMesh.SamplePosition` points where each step must pass `NavMesh.Raycast`, then shortened.
+The view turns through the game's `CameraHandler.ResetToRotation`. Arrival = the game observes the
+target and `CanPerform` is true (or it is a dock that accepts the held item). `[walk]` logs start,
+route, aiming, replans and the stop reason.
+
+Keys now follow the active device: `GamePadIconService.GetLastInputDeviceNameForPrimaryUser` (the
+game's glyph source) picks the device; gamepad bindings are spoken with the device's own control
+names (Unity `displayName`). Glyph sprite tags in game text are spoken as the control they show,
+using the game's `SpriteInputBindingMarkupObject` assets (`KillerFrequencyAccessMod.Glyphs.cs`);
+before, `NormalizeText` stripped them with every other tag.
 
 ## Next step
 

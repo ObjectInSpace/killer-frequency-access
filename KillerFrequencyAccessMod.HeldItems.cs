@@ -85,10 +85,19 @@ public sealed partial class KillerFrequencyAccessMod
         return GetFlatScreenInputs(interaction).Count > 0;
     }
 
-    /// <summary>"left click or numpad 0", from the live bindings of the game input.</summary>
+    /// <summary>
+    /// The keys or buttons for a game input on the device the game last saw input from
+    /// (GamePadIconService.GetLastInputDeviceNameForPrimaryUser, the same source the game's own button
+    /// glyphs use). Keyboard or mouse: "left click or numpad 0". A gamepad: each binding resolved on that
+    /// device, spoken with the device's own control name (Unity's layout displayName, for example "A" on
+    /// an Xbox pad, "Cross" on a PlayStation pad).
+    /// </summary>
     private static string DescribeKeys(string inputName)
     {
-        if (KeyTextByInput.TryGetValue(inputName, out var cached))
+        var device = GetActiveInputDevice();
+        var usePointer = device == null || device is Keyboard || device is Mouse;
+        var cacheKey = $"{inputName}|{(usePointer ? "keyboard and mouse" : device!.name)}";
+        if (KeyTextByInput.TryGetValue(cacheKey, out var cached))
         {
             return cached;
         }
@@ -106,12 +115,10 @@ public sealed partial class KillerFrequencyAccessMod
                 for (var i = 0; i < bindings.Count; i++)
                 {
                     var path = bindings[i].effectivePath ?? string.Empty;
-                    if (!path.StartsWith("<Keyboard>/", StringComparison.Ordinal) && !path.StartsWith("<Mouse>/", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    var key = DescribeControlPath(path);
+                    var isPointerPath = path.StartsWith("<Keyboard>/", StringComparison.Ordinal) || path.StartsWith("<Mouse>/", StringComparison.Ordinal);
+                    var key = usePointer
+                        ? (isPointerPath ? DescribeControlPath(path) : string.Empty)
+                        : (isPointerPath ? string.Empty : DescribeDeviceControl(device!, path));
                     if (key.Length > 0 && !keys.Contains(key))
                     {
                         keys.Add(key);
@@ -124,11 +131,68 @@ public sealed partial class KillerFrequencyAccessMod
 
         if (text.Length == 0)
         {
-            LogOnce($"keys-missing|{inputName}", $"[keys] no keyboard or mouse binding found for {inputName}");
+            LogOnce($"keys-missing|{cacheKey}", $"[keys] no binding found for {inputName} on {(usePointer ? "keyboard and mouse" : device!.name)}");
+        }
+        else
+        {
+            LogOnce($"keys|{cacheKey}", $"[keys] {inputName} on {(usePointer ? "keyboard and mouse" : device!.name)}: {text}");
         }
 
-        KeyTextByInput[inputName] = text;
+        KeyTextByInput[cacheKey] = text;
         return text;
+    }
+
+    /// <summary>The InputSystem device whose name the game reports as the last one used.</summary>
+    private static InputDevice? GetActiveInputDevice()
+    {
+        string name;
+        try
+        {
+            name = Il2Cpp.GamePadIconService.GetLastInputDeviceNameForPrimaryUser() ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LogOnce("active-device-error", $"[keys] GetLastInputDeviceNameForPrimaryUser failed: {ex.Message}");
+            return null;
+        }
+
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        var devices = InputSystem.devices;
+        for (var i = 0; i < devices.Count; i++)
+        {
+            var device = devices[i];
+            if (device != null && device.name == name)
+            {
+                LogOnce($"active-device|{name}", $"[keys] active device: {name} ({device.layout})");
+                return device;
+            }
+        }
+
+        LogOnce($"active-device-missing|{name}", $"[keys] the game reports device {name}, which InputSystem does not list");
+        return null;
+    }
+
+    /// <summary>A binding path ("&lt;Gamepad&gt;/buttonSouth") resolved on the device, spoken with the device's control name.</summary>
+    private static string DescribeDeviceControl(InputDevice device, string path)
+    {
+        var slash = path.IndexOf('/');
+        if (slash < 0 || path.Contains('{'))
+        {
+            return string.Empty;
+        }
+
+        var control = device.TryGetChildControl(path[(slash + 1)..]);
+        if (control == null)
+        {
+            return string.Empty;
+        }
+
+        var name = control.displayName;
+        return string.IsNullOrWhiteSpace(name) ? SplitWords(path[(slash + 1)..].Replace('/', ' ')) : name;
     }
 
     private static InputActionAsset? GetGameInputActions()

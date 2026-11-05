@@ -93,6 +93,10 @@
       <HintPath>$(Il2CppAssembliesDir)\Il2CppFMODUnity.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Il2CppTeam17.UI.Input">
+      <HintPath>$(Il2CppAssembliesDir)\Il2CppTeam17.UI.Input.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>

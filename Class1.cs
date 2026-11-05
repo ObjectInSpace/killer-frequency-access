@@ -27,13 +27,10 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private const float TargetListFreshnessSeconds = 1.25f;
     private const int MaxWalkableTargetsPerRefresh = 14;
     private const int MaxPathValidationAttemptsPerRefresh = 24;
-    private const float AutoWalkWaypointRefreshSeconds = 0.18f;
-    private const int MaxAutoWalkPathFailureFrames = 6;
     private const float CurrentRoomScanRadiusMeters = 24.0f;
     private const float CurrentRoomMaxVerticalDeltaMeters = 5.5f;
     private const int MaxCurrentRoomTargetCandidates = 40;
     private const float AutoWalkSpeed = 3.3f;
-    private const float AutoWalkStopRange = 1.8f;
     private const float AutoTurnDegreesPerSecond = 300f;
     private const float InteractionHorizontalToleranceDegrees = 15f;
     private const float InteractionVerticalToleranceDegrees = 12f;
@@ -126,11 +123,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     private bool _hasPathStallSample;
     private Vector3 _pathStallLastPosition;
     private Vector3 _pathGuidanceWaypoint;
-    private Vector3 _autoWalkWaypoint;
-    private float _nextAutoWalkWaypointRefreshTime = -100f;
-    private bool _hasAutoWalkWaypoint;
-    private bool _autoWalkUseDirectSteering;
-    private int _autoWalkPathFailureCount;
     private int _nextTmpUiScanIndex;
     private int _nextLegacyUiScanIndex;
     private int _lastKnownSceneBuildIndex = int.MinValue;
@@ -729,7 +721,8 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
             return string.Empty;
         }
 
-        var decoded = Regex.Replace(input, "<.*?>", " ");
+        // Button glyphs are sprite tags; speak the control they show before other tags are stripped.
+        var decoded = Regex.Replace(SpeakGlyphs(input), "<.*?>", " ");
         decoded = decoded.Replace("\r", " ").Replace("\n", " ");
         decoded = Regex.Replace(decoded, "\\s+", " ");
         return decoded.Trim();
