@@ -140,6 +140,16 @@ Commit straight to master; no branches while the mod is unreleased.
   `WorldUIManager.answerRoot` has active answers, arrows are bound to `UI/Navigate_InGame` and taken
   off `Gameplay/Move`/`MoveRaw`; reversed when answers close. The user settled that debug mode is off
   (numpad keys are game actions) and that walking works during choices. Installed, not yet run.
+- 2026-11-04, typed menu speech build: removed the position/name-guessing menu reader and the bulk
+  TMP/Text sweep with its perf modes. Menus now speak from `BootServices.menuManager.currentTopMenu`,
+  the EventSystem focus (or `WorldUIManager._cachedDialogChoice` for answers), and the widget types:
+  Slider + `SliderPercent`, `TMP_Dropdown` caption, `Toggle`, `InputRebinder.buttonLabel`, and On/Off
+  `MenuButton` pairs (on = Animator running `_pressedAnimator`). Row titles come from the rip's row
+  layouts (`Option_Title` / `Label`, description `Option_Text`). `DialogueBox` title and body are spoken
+  before its first button. World text comes from `WorldUIManager` subtitle, choice prompt, item info and
+  settings toast boxes, plus `DiegeticTextDisplay` panels when `FullyShown`. Answers say "n of m".
+  `[menu]` logs top-menu changes, a cached-choice focus fallback, and controls without a label.
+  Installed, not yet run.
 
 Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
 `NavMesh.CalculatePath` is unusable; the route is an A* over a 0.5 m lattice of

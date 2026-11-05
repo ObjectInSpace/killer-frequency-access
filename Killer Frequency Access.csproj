@@ -69,6 +69,14 @@
       <HintPath>$(Il2CppAssembliesDir)\Unity.InputSystem.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Unity.Localization">
+      <HintPath>$(Il2CppAssembliesDir)\Unity.Localization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(Il2CppAssembliesDir)\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>$(Il2CppAssembliesDir)\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>

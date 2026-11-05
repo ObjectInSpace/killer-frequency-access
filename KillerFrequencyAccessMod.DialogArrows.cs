@@ -27,7 +27,6 @@ public sealed partial class KillerFrequencyAccessMod
         ("right", "<Keyboard>/rightArrow"),
     };
 
-    private Il2CppServices.WorldUIManager? _dialogWorldUi;
     private bool _dialogArrowsActive;
     private int _lastAnswerCount = -1;
 
@@ -60,16 +59,13 @@ public sealed partial class KillerFrequencyAccessMod
 
     private int CountActiveAnswers()
     {
-        if (_dialogWorldUi == null)
+        var ui = TryGetWorldUi();
+        if (ui == null)
         {
-            _dialogWorldUi = UnityEngine.Object.FindObjectOfType<Il2CppServices.WorldUIManager>();
-            if (_dialogWorldUi == null)
-            {
-                return 0;
-            }
+            return 0;
         }
 
-        var root = _dialogWorldUi.answerRoot;
+        var root = ui.answerRoot;
         if (root == null || !root.gameObject.activeInHierarchy)
         {
             return 0;
