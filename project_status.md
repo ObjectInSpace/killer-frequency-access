@@ -35,9 +35,7 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   level; Backspace walks to the entry (a device's first part). O, Enter, `[` / `]` and categories are
   gone. Keys are ones the game's `InputActions` asset leaves unbound (the arrows are movement).
 - Rooms: the game's 25 `Il2Cpp.Room`s. `Room.volumes` is empty at runtime, so a room's space is
-  the Unity `OcclusionArea` boxes on its children (offline check `tools
-ip
-oom_check.py`: 797 of
+  the Unity `OcclusionArea` boxes on its children (offline check `tools\rip\room_check.py`: 797 of
   804 SCN_Main objects fall in a room). Name = floor folder + room object ("Ground Floor Break Room").
   The first room entry is the player's room and follows them. Entering a room is announced.
 - Doors: `Il2Cpp.RoomPortalDoor` (_door, _frontRoom, _backRoom, isOpen) lists the 16 room doors in
