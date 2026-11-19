@@ -46,6 +46,7 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
         UpdatePlayerRoomAnnouncement();
         UpdateHeldItemAnnouncement();
         LogPerformingInteractions();
+        LogPlaceHandler();
         UpdateDialogArrows();
         UpdateRangeCue();
         // World text first, so a conversation's question is spoken before its first answer.

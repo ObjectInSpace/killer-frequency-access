@@ -246,6 +246,16 @@ public sealed partial class KillerFrequencyAccessMod
             _walkAimedTime = now;
         }
 
+        // A dock for the held item is never the game's observedInteractable (no log has one; the held
+        // record walk failed "aimed, game observes nothing" at all 11 spots). The game picks the dock in
+        // FsPlaceHandler when Place is used, so arrival here is the view itself pointing at the dock.
+        if (_walkAimedTime >= 0f && _placesForHeldIds.Contains(target.GetInstanceID()) && IsViewOnTarget(target))
+        {
+            StopAutoWalk("arrived (view on dock for held item)");
+            SpeakInRangeWithAction(target);
+            return;
+        }
+
         var aimedLongEnough = _walkAimedTime >= 0f && now - _walkAimedTime > AimObserveWaitSeconds;
         var timedOut = now - _walkAimStartTime > AimGiveUpSeconds;
         if (!aimedLongEnough && !timedOut)
@@ -363,6 +373,26 @@ public sealed partial class KillerFrequencyAccessMod
         var from = origin.position;
         _walkStandpoints.Sort((a, b) => PlanarDistance(from, a).CompareTo(PlanarDistance(from, b)));
         MelonLoader.MelonLogger.Msg($"[walk] {_walkStandpoints.Count} usable spots for {GetSpokenName(target)} ({tested} NavMesh points tested, {tooSteep} past the {pitchLimit:0.#} degree view limit, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
+    }
+
+    /// <summary>
+    /// The camera's forward ray, with the game's interaction mask, first hits one of the target's own
+    /// colliders within the target's fsMaxReachDistance.
+    /// </summary>
+    private static bool IsViewOnTarget(Transform target)
+    {
+        var camera = GetInteractorCamera();
+        if (camera == null || !TryGetGameInteractable(target, out var interactable))
+        {
+            return false;
+        }
+
+        int mask = Il2Cpp.ControllerBaseInteractor.raycastLayerMask.value;
+        var view = camera.transform;
+        return Physics.Raycast(view.position, view.forward, out var hit, interactable.fsMaxReachDistance, mask)
+            && hit.collider != null
+            && TryGetGameInteractable(hit.collider.transform, out var hitInteractable)
+            && hitInteractable.GetInstanceID() == interactable.GetInstanceID();
     }
 
     /// <summary>

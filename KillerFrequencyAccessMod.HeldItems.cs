@@ -409,6 +409,48 @@ public sealed partial class KillerFrequencyAccessMod
         return keys.Length == 0 ? "place" : $"place with {keys}";
     }
 
+    private string _lastPlaceSignature = string.Empty;
+    private Il2Cpp.FsPlaceHandler? _placeHandler;
+
+    /// <summary>
+    /// Logs the game's place projection: FsPlaceHandler.projectionRunning, PlacingOutcome and
+    /// SelectedDockInteraction's dock. Shows whether the game picks the dock a walk aimed at.
+    /// </summary>
+    private void LogPlaceHandler()
+    {
+        if (_placeHandler == null)
+        {
+            _placeHandler = Il2Cpp.FlatScreenPlayer.instance != null ? Il2Cpp.FlatScreenPlayer.instance.fsPlaceHandler : null;
+            if (_placeHandler == null && TryGetPlayerInteractor(out var interactor))
+            {
+                _placeHandler = interactor.GetComponentInChildren<Il2Cpp.FsPlaceHandler>(true);
+            }
+
+            if (_placeHandler == null)
+            {
+                return;
+            }
+        }
+
+        string signature;
+        if (!_placeHandler.projectionRunning)
+        {
+            signature = "not projecting";
+        }
+        else
+        {
+            var dock = _placeHandler.SelectedDockInteraction;
+            var dockName = dock == null ? "no dock" : dock.Interactable == null ? "dock ?" : $"dock {GetSpokenName(dock.Interactable)}";
+            signature = $"{_placeHandler.PlacingOutcome}, {dockName}";
+        }
+
+        if (signature != _lastPlaceSignature)
+        {
+            _lastPlaceSignature = signature;
+            MelonLoader.MelonLogger.Msg($"[place] {signature}");
+        }
+    }
+
     /// <summary>Logs which interactions the game is performing, so a test run shows what actually happened.</summary>
     private void LogPerformingInteractions()
     {
