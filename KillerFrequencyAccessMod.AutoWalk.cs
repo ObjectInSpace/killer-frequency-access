@@ -386,7 +386,7 @@ public sealed partial class KillerFrequencyAccessMod
         var desired = Quaternion.LookRotation(direction.normalized, Vector3.up);
         var current = camera.transform.rotation;
         var remaining = Quaternion.Angle(current, desired);
-        SetViewRotation(Quaternion.RotateTowards(current, desired, AimDegreesPerSecond * deltaTime), remaining);
+        SetViewRotation(Quaternion.RotateTowards(current, desired, AimDegreesPerSecond * deltaTime));
         return remaining;
     }
 
@@ -401,13 +401,10 @@ public sealed partial class KillerFrequencyAccessMod
 
         var current = camera.transform.rotation;
         var desired = Quaternion.LookRotation(planarDirection.normalized, Vector3.up);
-        SetViewRotation(Quaternion.RotateTowards(current, desired, AutoTurnDegreesPerSecond * deltaTime), Quaternion.Angle(current, desired));
+        SetViewRotation(Quaternion.RotateTowards(current, desired, AutoTurnDegreesPerSecond * deltaTime));
     }
 
     private static Il2Cpp.CameraHandler? _cameraHandler;
-    private static bool _viewUseTransforms;
-    private static float _viewCheckStartTime = -1f;
-    private static float _viewCheckStartAngle;
 
     /// <summary>
     /// The player's CameraHandler. In the rip it sits on PlayerController/CameraJoint/CameraFirstPerson,
@@ -437,55 +434,16 @@ public sealed partial class KillerFrequencyAccessMod
     }
 
     /// <summary>
-    /// Sets the view through CameraHandler.ResetToRotation. If the camera has not turned at all after a
-    /// second of asking, switches (once, logged) to the transforms the handler drives: playerBody for
-    /// yaw, cameraHinge for pitch.
+    /// Sets the view through CameraHandler.ResetToRotation, the only route the game's look update keeps.
+    /// A fallback that wrote playerBody/cameraHinge directly was removed: its "view did not turn" check
+    /// compared remaining angles while the walk's goal direction changed at each corner (22 to 161 degrees),
+    /// so it tripped in nearly every session, and once on, the game overwrote those transforms and every
+    /// standing spot timed out with "view did not settle" (logs 2026-11-05 to 11-19: 24 arrivals and 4 spot
+    /// failures before the switch, about 236 spot failures after).
     /// </summary>
-    private static void SetViewRotation(Quaternion rotation, float remainingDegrees)
+    private static void SetViewRotation(Quaternion rotation)
     {
-        var handler = GetCameraHandler();
-        if (handler == null)
-        {
-            return;
-        }
-
-        if (!_viewUseTransforms)
-        {
-            handler.ResetToRotation(rotation);
-            var now = Time.unscaledTime;
-            if (remainingDegrees < 5f)
-            {
-                _viewCheckStartTime = -1f;
-            }
-            else if (_viewCheckStartTime < 0f)
-            {
-                _viewCheckStartTime = now;
-                _viewCheckStartAngle = remainingDegrees;
-            }
-            else if (now - _viewCheckStartTime > 1f)
-            {
-                if (remainingDegrees > _viewCheckStartAngle - 1f)
-                {
-                    _viewUseTransforms = true;
-                    MelonLoader.MelonLogger.Msg($"[walk] ResetToRotation did not turn the view in 1 s ({_viewCheckStartAngle:0} to {remainingDegrees:0} degrees); using playerBody and cameraHinge");
-                }
-
-                _viewCheckStartTime = -1f;
-            }
-
-            return;
-        }
-
-        var euler = rotation.eulerAngles;
-        if (handler.playerBody != null)
-        {
-            handler.playerBody.rotation = Quaternion.Euler(0f, euler.y, 0f);
-        }
-
-        if (handler.cameraHinge != null)
-        {
-            handler.cameraHinge.localRotation = Quaternion.Euler(euler.x, 0f, 0f);
-        }
+        GetCameraHandler()?.ResetToRotation(rotation);
     }
 
     /// <summary>The game observes the target and can perform one of its actions (or it is a dock that accepts the held item).</summary>
