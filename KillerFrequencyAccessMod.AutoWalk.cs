@@ -305,7 +305,14 @@ public sealed partial class KillerFrequencyAccessMod
         var aim = ResolveInteractionAimPoint(target);
         var reach = interactable.fsMaxReachDistance;
         int mask = Il2Cpp.ControllerBaseInteractor.raycastLayerMask.value;
+        // The game clamps the view's pitch to CameraHandler.verticalViewAngleLimit (Seated applies in a chair).
+        // Spots that need a steeper look never settle: the record player run stalled 25-60 degrees short at
+        // every close spot ("view did not settle"), because the turntable is low and the spots were next to it.
+        var pitchLimit = Il2Cpp.CameraHandler.verticalViewAngleLimit;
+        LogOnce($"walk-pitch-limit|{pitchLimit}|{Il2Cpp.CameraHandler.verticalViewAngleLimitSeated}",
+            $"[walk] view pitch limit {pitchLimit:0.#} degrees (seated {Il2Cpp.CameraHandler.verticalViewAngleLimitSeated:0.#})");
         var tested = 0;
+        var tooSteep = 0;
         for (var radius = 0.35f; radius <= reach + 0.01f; radius += 0.25f)
         {
             for (var step = 0; step < 16; step++)
@@ -331,6 +338,16 @@ public sealed partial class KillerFrequencyAccessMod
                 }
 
                 var toAim = aim - eye;
+                if (pitchLimit > 0f)
+                {
+                    var pitch = Mathf.Abs(Mathf.Atan2(toAim.y, new Vector2(toAim.x, toAim.z).magnitude) * Mathf.Rad2Deg);
+                    if (pitch > pitchLimit - AimSettleDegrees)
+                    {
+                        tooSteep++;
+                        continue;
+                    }
+                }
+
                 if (!Physics.Raycast(eye, toAim.normalized, out var rayHit, toAim.magnitude + 0.3f, mask)
                     || rayHit.collider == null
                     || !TryGetGameInteractable(rayHit.collider.transform, out var hitInteractable)
@@ -345,7 +362,7 @@ public sealed partial class KillerFrequencyAccessMod
 
         var from = origin.position;
         _walkStandpoints.Sort((a, b) => PlanarDistance(from, a).CompareTo(PlanarDistance(from, b)));
-        MelonLoader.MelonLogger.Msg($"[walk] {_walkStandpoints.Count} usable spots for {GetSpokenName(target)} ({tested} NavMesh points tested, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
+        MelonLoader.MelonLogger.Msg($"[walk] {_walkStandpoints.Count} usable spots for {GetSpokenName(target)} ({tested} NavMesh points tested, {tooSteep} past the {pitchLimit:0.#} degree view limit, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
     }
 
     /// <summary>
