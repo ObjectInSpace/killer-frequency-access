@@ -79,18 +79,51 @@ public sealed partial class KillerFrequencyAccessMod
         _walkStuckReplans = 0;
         FindStandpoints(origin, target);
         _walkStandpointIndex = 0;
+        if (_walkStandpoints.Count == 0 && IsCrouching())
+        {
+            // 0.9 m crouched eye height: in the 2026-11-19 evening run about 60 of 100 failed walks were
+            // crouched, most with 0 usable spots (desk buttons and slots are out of sight below the desk edge).
+            StopAutoWalk("crouching, no usable spot");
+            SpeakSelectionText($"Cannot reach {name} while crouching. {DescribeStandUp()}, then walk again");
+            return;
+        }
+
         if (!PlanWalk(origin.position, target, "start"))
         {
             StopAutoWalk($"no path to {name}");
-            SpeakSelectionText($"No path to {name}");
+            SpeakSelectionText($"No path to {name}{CrouchHint()}");
             return;
         }
 
         SpeakSelectionText($"Walking to {name}");
     }
 
-    /// <summary>Route from the NavMesh: player's nearest NavMesh point to the target's nearest NavMesh point.</summary>
+    /// <summary>
+    /// Plans to the current standing spot; a spot with no NavMesh route (a separate NavMesh island:
+    /// "no NavMesh route" after ~3800 nodes in the 2026-11-19 run, which then ended the walk) is skipped
+    /// for the next one.
+    /// </summary>
     private bool PlanWalk(Vector3 from, Transform target, string reason)
+    {
+        while (true)
+        {
+            if (PlanWalkToCurrentSpot(from, target, reason))
+            {
+                return true;
+            }
+
+            if (_walkStandpointIndex + 1 >= _walkStandpoints.Count)
+            {
+                return false;
+            }
+
+            _walkStandpointIndex++;
+            reason = $"spot {_walkStandpointIndex + 1} (previous unreachable)";
+        }
+    }
+
+    /// <summary>Route from the NavMesh: player's nearest NavMesh point to the current spot (or the target's nearest point).</summary>
+    private bool PlanWalkToCurrentSpot(Vector3 from, Transform target, string reason)
     {
         _walkCorners.Clear();
         _walkCornerIndex = 0;
@@ -202,14 +235,14 @@ public sealed partial class KillerFrequencyAccessMod
                     if (_walkStuckReplans > WalkMaxStuckReplans)
                     {
                         StopAutoWalk("stuck");
-                        SpeakSelectionText($"Stuck. {GetSpokenName(target)} is {DescribeWhere(origin, nearest)}");
+                        SpeakSelectionText($"Stuck. {GetSpokenName(target)} is {DescribeWhere(origin, nearest)}{CrouchHint()}");
                         return;
                     }
 
                     if (!PlanWalk(origin.position, target, $"replan (stuck {_walkStuckReplans})"))
                     {
                         StopAutoWalk("no path on replan");
-                        SpeakSelectionText($"No path to {GetSpokenName(target)}");
+                        SpeakSelectionText($"No path to {GetSpokenName(target)}{CrouchHint()}");
                     }
 
                     return;
@@ -277,7 +310,25 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         StopAutoWalk($"no spot worked (game observes {observed})");
-        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
+        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}{CrouchHint()}");
+    }
+
+    /// <summary>The game's own move mode: FlatScreenPlayer.currentMoveMode is CROUCH.</summary>
+    private static bool IsCrouching()
+    {
+        var player = Il2Cpp.FlatScreenPlayer.instance;
+        return player != null && player.currentMoveMode == Il2Cpp.PlayerMoveModes.CROUCH;
+    }
+
+    private static string DescribeStandUp()
+    {
+        var keys = DescribeKeys("Gameplay_Crouch");
+        return keys.Length == 0 ? "Stand up" : $"Stand up with {keys}";
+    }
+
+    private static string CrouchHint()
+    {
+        return IsCrouching() ? $". You are crouching. {DescribeStandUp()}" : string.Empty;
     }
 
     /// <summary>
@@ -476,15 +527,15 @@ public sealed partial class KillerFrequencyAccessMod
         GetCameraHandler()?.ResetToRotation(rotation);
     }
 
-    /// <summary>The game observes the target and can perform one of its actions (or it is a dock that accepts the held item).</summary>
+    /// <summary>
+    /// The game observes the target. Requiring a performable action as well failed walks that had reached
+    /// the target (2026-11-19 run: cassette slot observed with Dock=no/Undock=no for a tape that does not
+    /// fit, notes and post-its observed with PickUp=no while the hands were full); the arrival speech says
+    /// what can be done, or that nothing can right now.
+    /// </summary>
     private bool IsReadyToUse(Transform target)
     {
-        if (!IsObservedByGame(target))
-        {
-            return false;
-        }
-
-        return HasPerformableInteraction(target) || _placesForHeldIds.Contains(target.GetInstanceID());
+        return IsObservedByGame(target);
     }
 
     private void SpeakInRangeWithAction(Transform target)
@@ -496,7 +547,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         var name = GetSpokenName(target);
-        SpeakSelectionText(actions.Count == 0 ? $"{name} in range" : $"{name} in range. {string.Join(". ", actions)}");
+        SpeakSelectionText(actions.Count == 0 ? $"{name} in range. Nothing to do with it right now" : $"{name} in range. {string.Join(". ", actions)}");
     }
 
     private void StopAutoWalk(string reason)
