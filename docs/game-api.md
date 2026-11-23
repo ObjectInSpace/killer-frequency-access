@@ -124,6 +124,64 @@ current save begins on a dialog choice, and walking is only allowed after it. So
 the normal state, and dialogs (and probably seated or console scopes) suspend it.
 **Unverified:** which other locations set `allowMovement` false.
 
+## Player body, posture and view (rip SCN_Main, decompiled, logs 2026-11-19 to 11-22)
+
+- `PlayerController` carries the `CharacterController`: radius **0.15**, height 2, centre y 1.035,
+  `stepOffset` 0.3, `slopeLimit` 50, skin 0.05. The player transform is about 0.7 m above the feet;
+  use `PlayerBase.GetFootLocation()` for the feet.
+- Eye height above the feet: `PlayerBase.playerHeight` (`_maxPlayerHeight` **1.6** standing,
+  `_minPlayerHeight` **0.9** crouched); the logs measured 1.60 and 0.90.
+- Posture: `FlatScreenPlayer.currentMoveMode` (`PlayerMoveModes.WALK`, `CROUCH`),
+  `ConfigureForMoveMode(mode)` (the game's routine for entering a mode), `transitioningBetweenMoveModes`
+  while the camera moves (`timeToTransitionMoveMode` 0.2). Speeds: `walkMoveSpeed` 2.55,
+  `crouchMoveSpeed` 1.25. `PlayerBase.crouchCheckLayerMask` (bits 262657: layers 0, 9, 18) is what the
+  game checks above a crouched player; it includes layer 0, so the player's own colliders must be skipped.
+  Crouch is a toggle on either Ctrl key.
+- View: `CameraHandler` on `PlayerController/CameraJoint/CameraFirstPerson`.
+  `CameraHandler.ResetToRotation(Quaternion)` is the only turn the game's look update keeps; writing
+  `playerBody` / `cameraHinge` directly is overwritten. Pitch is clamped to
+  `CameraHandler.verticalViewAngleLimit` (static, **45** at runtime; `verticalViewAngleLimitSeated` 75).
+- Game's pointing: `ControllerBaseInteractor.observedInteractable` (layer mask
+  `ControllerBaseInteractor.raycastLayerMask`, reach `fsMaxReachDistance`, 1.2 on almost everything).
+  While an item is held, a dock is **never** the observed interactable (no log has one).
+
+## Walkable area (NavMesh) and the walking graph
+
+- The game strips `NavMeshPath` (so `NavMesh.CalculatePath`) and `NavMesh.CalculateTriangulation`.
+  `NavMesh.Raycast` traces in x/z across the start's own floor: a goal on another floor reads as clear.
+- Bake (NavMesh_0, SCN_Main): `agentRadius` 0.22, `agentHeight` 2, `agentClimb` 0.05, `agentSlope` 45,
+  cell 0.025. Baked from the 2,086 Navigation Static objects; none of the 637 Rigidbodies (door leaves,
+  drawers, props) and neither of the 2 `NavMeshObstacle`s (the wheeled alibi boards, `m_Carve` 0).
+  Every route therefore fits a standing player (2 m), and doors and props are not in it.
+- Tiles are Detour data (magic "VAND", version 16, 72-byte header, 32-byte polygons; details in
+  `tools\rip\gen_navmesh.py`). Tile-border links are not stored; they are matched on overlapping edges.
+  In Unity's data, polygon edge order gives the left side first (as Recast).
+- SCN_Main: 3,523 polygons, 68 regions. The station is one region of 2,139 polygons spanning the
+  basement (-2.39), ground (0), the 1.0 m level and the first floor (3.9 to 4.2), joined by stairs of
+  ~40 degrees built from 0.3 m sloped strips (e.g. x 11.25 to 14.3, z -5.8 to -4.4). 23 small pockets
+  lie in and around the building, the nearest 0.6 m from the main floor; the two basement pieces of
+  68 and 72 polygons are closed off.
+- The mod's graph (`Generated\Nav\*.navbin.gz`, `NavGraph.cs`) is the only walking data. Funnelled in
+  x/z over the whole path, 99 of 1,000 random routes cut through a floor or wall; funnelled per 0.3 m
+  height band, none did.
+
+## Doors, containers and placing
+
+- `Il2Cpp.Openable`: `Open()`, `Close()`, `IsFullyOpen()`, `HowOpen()`, `IsLocked()`, `m_handle`.
+  `DrawerOpenable` overrides `Open()`; `DoorOpenable` overrides `IsFullyOpen()` / `HowOpen()` but not
+  `Open()` or `IsLocked()`, so whether `Open()` swings a hinged door is **unverified** (the mod checks
+  `HowOpen()` after every open).
+- `RoomPortal.plane` and `extents` give a doorway; `RoomPortalDoor._door` is its `DoorOpenable`.
+- Placing: `FlatScreenPlayer.fsPlaceHandler` (`FsPlaceHandler`): `projectionRunning`, `PlacingOutcome`
+  (Unknown, Drop, PlaceOk, PlaceInvalid, Dock), `SelectedDockInteraction` (the dock the game will use).
+  Verified 2026-11-19: walking to the vinyl slot and pressing Place gave PlaceOk on that dock.
+
+## Keys bound by the game (InputActions in the rip)
+
+Keyboard: 1 2 3, A D S W, E F P Q R, arrows, Tab, Escape, F4 (free camera), F5 / F9 (quicksave,
+quickload), both Ctrl (Crouch; right Ctrl also SkipDialogue), numpad 0-9 and its operators. The mod
+uses Home, End, Page Up, Page Down, Backspace and F8, none of which the game binds.
+
 ## Rooms and doors
 
 - `Il2Cpp.Room` (`name`, `root`, `volumes` bounds array), `RoomPortal` (`_frontRoom`, `_backRoom`,

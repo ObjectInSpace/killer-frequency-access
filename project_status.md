@@ -1,6 +1,6 @@
 # Killer Frequency Access: project status
 
-Last updated: 2026-11-04
+Last updated: 2026-11-23
 
 ## State
 
@@ -26,8 +26,7 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
 - Player: the `ControllerBaseInteractor` (on `PlayerController`, which also has the
   `CharacterController`; one per scene). It is the navigation origin.
 - Pointing at: `ControllerBaseInteractor.observedInteractable`. Auto-walk stops when the game reports
-  the target as observed; "in reach" is the camera within the target's `fsMaxReachDistance` of
-  its nearest `m_Colliders` entry.
+  the target as observed; the mod has no reach estimate of its own.
 
 `KillerFrequencyAccessMod.ObjectList.cs` (object list, user design 2026-11-05, always on outside menus):
 - A tree: rooms, then what stands on its own in the room (devices, drawers, doors, docks, loose
@@ -70,9 +69,42 @@ Names: parts of a device are named after it (`tools\rip\gen_names.py`, `DEVICES`
 or slider below `VinylPlayer` is "record player ..." ("record player vinyl slot"), likewise cassette
 player, dictaphone, soundboard, fuse box, keypad, handheld radio, computer, lever.
 
-Still old code, not yet rebuilt: NavMesh waypoint search in auto-walk. The environment scan
-(the \ key, raycast open-path tones) was removed on 2026-11-04 at the user's request: it never worked and
-wasn't useful. Unity audio is disabled in this game (`m_DisableAudio: 1`), so mod sounds go through winmm.
+The environment scan (the \ key, raycast open-path tones) was removed on 2026-11-04 at the user's
+request: it never worked and wasn't useful. Unity audio is disabled in this game (`m_DisableAudio: 1`),
+so mod sounds go through winmm.
+
+## How auto-walk works now (2026-11-23)
+
+Backspace walks to the selected object. The walk keeps its own NavMesh routing and follows Date
+Everything Access's shape above it (`SimpleNavBridge`, `SimpleNavCoverageSweep`). The facts behind every
+number are in `docs\game-api.md` ("Player body", "Walkable area", "Doors, containers and placing").
+- Route (`NavGraph.cs`, data `Generated\Nav\*.navbin.gz` from `tools\rip\gen_navmesh.py`): the scene's
+  own NavMesh polygons from the rip, picked by scene name (the game will not be updated). A* over
+  polygons, then the funnel run one 0.3 m height band at a time, so routes between floors go by the
+  stairs and never through a floor. Both ends are snapped onto one connected region. Nothing else is
+  used: the 0.5 m lattice over `NavMesh.SamplePosition` could not climb the stairs and was removed.
+- Where to stand (`FindStandpoints` in `AutoWalk.cs`): points around the target on every floor under
+  them, at both eye heights (1.6 standing, 0.9 crouched), within `fsMaxReachDistance`, inside the
+  45 degree pitch limit, with the game's interaction ray hitting the target first. Nearest first,
+  crouched spots counted 0.5 m further. A spot with no route is skipped.
+- Posture (`WalkPosture.cs`): stand while more than 1.5 m of route remain (faster), then take the
+  spot's posture through `ConfigureForMoveMode`; standing checks headroom on `crouchCheckLayerMask`.
+  A posture change by the player ends this for the walk.
+- Doors (`WalkDoors.cs`): a closed room door whose portal the route crosses is opened 1.5 m before it
+  (`Openable.Open()`); a locked one stops the walk. Unmoved after 3 s: the walk stops and says so.
+- Hidden targets (`WalkContainers.cs`): with no spot, the colliders the sight lines hit say why. A
+  closed container is walked to and opened, then the walk goes on; a holder (a tape in a slot) becomes
+  the target.
+- Obstacles (`WalkObstacles.cs`): on a stall the player's capsule is cast toward the next corner; the
+  collider hit gets a footprint, and a detour around it over the graph rejoins the route. None: "Blocked
+  by X. No way around".
+- Corners count as reached within 0.3 m, and 0.6 m of height (stairs). The view turns through
+  `CameraHandler.ResetToRotation`. Arrival = the game observes the target (whatever its actions), or,
+  for a dock that fits the held item, the view is on it (docks are never observed while holding).
+- Coverage sweep (`CoverageSweep.cs`, F8): walks to every listed object, nearest first, twice at most,
+  no teleporting. Results: `UserData\KillerFrequencyAccess\sweeps\<run>\results.jsonl` and `summary.txt`.
+- Logs: `[walk]` (spots, route, posture, doors, containers, stalls, detours, stop reason), `[nav]`,
+  `[place]`, `[sweep]`.
 
 ## Findings (2026-11-04)
 
@@ -98,7 +130,7 @@ wasn't useful. Unity audio is disabled in this game (`m_DisableAudio: 1`), so mo
 4. Announce what the player points at from `observedInteractable`. **Done, untested.**
 5. Rooms and doors from `Room` / `RoomPortalDoor` (say which room a target is in).
 6. Rip and roster of interactables. **Done** (`docs\rip\`, tools in `tools\rip\`).
-7. Logging and a visit-every-object sweep, as in Date Everything Access.
+7. Logging and a visit-every-object sweep, as in Date Everything Access. **Done, not yet run** (F8).
 8. Audio guidance, after targeting works. Model it on Date Everything Access (`ObjectTracker.cs`,
    `AccessibilityWatcher.AimCoach.cs`), not Before the Storm (third-person, speech-only clock
    directions): one continuous tone for the selected target. Walking: pulse rate = distance,
@@ -166,12 +198,15 @@ Commit straight to master; no branches while the mod is unreleased.
   `PlaySound` from memory. `[range]` logs the choice transitions. The \ environment scan was removed.
   Installed, not yet run.
 
-Auto-walk now (`KillerFrequencyAccessMod.AutoWalk.cs`): the game strips `NavMeshPath`, so
-`NavMesh.CalculatePath` is unusable; the route is an A* over a 0.5 m lattice of
-`NavMesh.SamplePosition` points where each step must pass `NavMesh.Raycast`, then shortened.
-The view turns through the game's `CameraHandler.ResetToRotation`. Arrival = the game observes the
-target and `CanPerform` is true (or it is a dock that accepts the held item). `[walk]` logs start,
-route, aiming, replans and the stop reason.
+- 2026-11-19, auto-walk runs: the record player was out of reach because the view stalled 25-60 degrees
+  short (pitch limit 45). A "ResetToRotation did not turn" fallback tripped falsely while walking and
+  then broke every aim (24 arrivals before it, about 236 spot failures after; removed). Docks are never
+  observed while holding; walking to the vinyl slot and pressing Place then worked (PlaceOk). About 60
+  of 100 failed walks were crouched (0.9 m eye, desk items out of sight).
+- 2026-11-22, long run: most failures were "no path" between floors (the lattice could not climb the
+  stairs) and 0 standing spots for targets on another floor (spots were sampled at the player's
+  height). This led to the polygon graph, spots in both postures and the rest of "How auto-walk works
+  now". None of the 2026-11-23 walking changes has been run yet.
 
 Keys now follow the active device: `GamePadIconService.GetLastInputDeviceNameForPrimaryUser` (the
 game's glyph source) picks the device; gamepad bindings are spoken with the device's own control
@@ -181,10 +216,11 @@ before, `NormalizeText` stripped them with every other tag.
 
 ## Next step
 
-Run the rooms/held items/keys build and retry the record task: take a record from the record box,
-put it on the record player ("record player vinyl slot"), press "record player play button".
-Send `MelonLoader\Latest.log`: `[rooms]`, `[held]` (fits N of M docks), `[keys]`, `[performing]`,
-`[observed]`, `[speech]`.
+Run a coverage sweep (F8) in SCN_Main from a save that can be changed (the walk opens doors and
+containers and changes posture). Send `UserData\KillerFrequencyAccess\sweeps\<run>\summary.txt` and
+`MelonLoader\Latest.log`, then fix failures by category. Check first in the log: doors and containers
+open with `Open()` (`[walk] opening`, then `open` or `did not open`), posture switches
+(`[walk] posture:`), and `[nav]` names NavMesh_0.
 
 The user runs test builds when one is needed. Answer anything the rip or decompiled code can
 answer offline first; ask for a run only when the answer exists only at runtime.
@@ -193,6 +229,12 @@ answer offline first; ask for a run only when the answer exists only at runtime.
   `C:` has little free space, so use `D:`.
 
 ## Open questions
+
+- Unverified at runtime (2026-11-23 build): whether `Openable.Open()` moves hinged `DoorOpenable`s;
+  whether `ConfigureForMoveMode` alone behaves like the crouch key; detours around obstacles; the sweep;
+  the walking graphs of SCN_Intro, SCN_Menu and SCN_Epilogue.
+- Deferred (user, 2026-11-23): pinboard items and post-its have no standing spots. The pinboard has its
+  own first-person scope in the game and needs a separate investigation.
 
 - Whether `Room.volumes` cover every object, or some land in no room.
 - Whether `CanPerform` needs the item to be hovered (logged by `[observed]`).
