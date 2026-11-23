@@ -24,7 +24,6 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
 
     private readonly List<MonoBehaviour> _cachedNavigationComponents = new();
     private readonly Collider[] _nearbyInteractionColliderBuffer = new Collider[768];
-    private float _nextNavigationComponentCacheRefreshTime = -100f;
     private bool _isAutoWalking;
     private int _lastObservedInteractableObjectId = -1;
     private string _lastSelectionSpeechKey = string.Empty;

@@ -53,11 +53,6 @@ public sealed partial class KillerFrequencyAccessMod
 
     private HashSet<int> _placesForHeldIds = new();
 
-    private void RefreshPlacesForHeld()
-    {
-        _placesForHeldIds = new HashSet<int>(FindPlacesForHeldItem().ConvertAll(t => t.GetInstanceID()));
-    }
-
     private sealed class RoomInfo
     {
         public RoomInfo(GameRoom room, string name, List<OcclusionArea> areas)

@@ -175,24 +175,6 @@ public sealed partial class KillerFrequencyAccessMod
         return target.position;
     }
 
-    /// <summary>True when the camera is within the Interactable's own fsMaxReachDistance of its nearest collider.</summary>
-    private bool IsWithinReach(Transform target)
-    {
-        var camera = GetInteractorCamera();
-        if (camera == null || !TryGetGameInteractable(target, out var interactable))
-        {
-            return false;
-        }
-
-        var from = camera.transform.position;
-        if (!TryGetInteractableCollider(interactable, from, out var collider))
-        {
-            return false;
-        }
-
-        return Vector3.Distance(from, collider.ClosestPoint(from)) <= interactable.fsMaxReachDistance;
-    }
-
     /// <summary>True when the game itself reports <paramref name="target"/> as the object the player points at.</summary>
     private bool IsObservedByGame(Transform target)
     {
@@ -340,38 +322,6 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         return false;
-    }
-
-    private static bool HasAvailableInteraction(Transform target)
-    {
-        return GetAvailableVerbs(target).Count > 0;
-    }
-
-    /// <summary>Every interaction on the object with its Available flag, for the log.</summary>
-    private static string DescribeAllInteractions(GameInteractableBase interactable)
-    {
-        var parts = new List<string>();
-        foreach (var interaction in interactable.GetComponents<GameInteraction>())
-        {
-            if (interaction == null)
-            {
-                continue;
-            }
-
-            string state;
-            try
-            {
-                state = interaction.Available ? "available" : "unavailable";
-            }
-            catch (Exception ex)
-            {
-                state = $"error {ex.Message}";
-            }
-
-            parts.Add($"{GetInteractionTypeName(interaction)}={state}{(HasFlatScreenInput(interaction) ? string.Empty : " (VR only)")}");
-        }
-
-        return string.Join(", ", parts);
     }
 
     private static string GetVerb(GameInteraction interaction)

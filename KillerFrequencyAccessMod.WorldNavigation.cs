@@ -207,15 +207,5 @@ public sealed partial class KillerFrequencyAccessMod
         return "front left";
     }
 
-    private static bool IsFiniteVector3(Vector3 value)
-    {
-        return !float.IsNaN(value.x)
-            && !float.IsNaN(value.y)
-            && !float.IsNaN(value.z)
-            && !float.IsInfinity(value.x)
-            && !float.IsInfinity(value.y)
-            && !float.IsInfinity(value.z);
-    }
-
 }
 
