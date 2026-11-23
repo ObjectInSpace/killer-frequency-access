@@ -28,11 +28,45 @@ internal sealed class NavGraph
     private readonly (int Other, Vector3 A, Vector3 B)[][] _links;
     private readonly Dictionary<(int, int), List<int>> _grid = new();
 
+    /// <summary>Connected region of each polygon (polygons reachable from each other share one).</summary>
+    private readonly int[] _region;
+    private readonly List<int> _regionSize = new();
+
     private NavGraph(string name, Vector3[][] polys, (int, Vector3, Vector3)[][] links)
     {
         Name = name;
         _polys = polys;
         _links = links;
+        _region = new int[polys.Length];
+        Array.Fill(_region, -1);
+        var stack = new Stack<int>();
+        for (var seed = 0; seed < polys.Length; seed++)
+        {
+            if (_region[seed] >= 0)
+            {
+                continue;
+            }
+
+            var id = _regionSize.Count;
+            var size = 0;
+            _region[seed] = id;
+            stack.Push(seed);
+            while (stack.Count > 0)
+            {
+                var poly = stack.Pop();
+                size++;
+                foreach (var (other, _, _) in links[poly])
+                {
+                    if (_region[other] < 0)
+                    {
+                        _region[other] = id;
+                        stack.Push(other);
+                    }
+                }
+            }
+
+            _regionSize.Add(size);
+        }
         for (var i = 0; i < polys.Length; i++)
         {
             float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
@@ -116,6 +150,75 @@ internal sealed class NavGraph
     /// </summary>
     public bool TryClosestPoint(Vector3 point, float maxDistance, out Vector3 closest)
     {
+        return TryClosestPoint(point, maxDistance, -1, out closest);
+    }
+
+    /// <summary>
+    /// Region of the polygon under a point on the graph, and that region's polygon count; -1 if none.
+    /// </summary>
+    public int RegionAt(Vector3 point, out int polygons)
+    {
+        var poly = Locate(point);
+        polygons = poly < 0 ? 0 : _regionSize[_region[poly]];
+        return poly < 0 ? -1 : _region[poly];
+    }
+
+    /// <summary>
+    /// Snaps both ends of a route onto one connected region. Each end goes to its closest graph point; if
+    /// those lie in different regions (the player can stand where the graph has no floor: its radius is
+    /// 0.15 m against the bake's 0.22 m, and SCN_Main has 23 small pockets near the main floor), either end
+    /// is moved, within <paramref name="maxDistance"/>, into the other's region, whichever moves less.
+    /// </summary>
+    public bool TrySnapConnected(Vector3 start, Vector3 goal, float maxDistance, out Vector3 snappedStart, out Vector3 snappedGoal, out string failure)
+    {
+        snappedStart = start;
+        snappedGoal = goal;
+        failure = string.Empty;
+        if (!TryClosestPoint(start, maxDistance, out var s))
+        {
+            failure = $"start {start} is not within {maxDistance} m of the graph";
+            return false;
+        }
+
+        if (!TryClosestPoint(goal, maxDistance, out var g))
+        {
+            failure = $"goal {goal} is not within {maxDistance} m of the graph";
+            return false;
+        }
+
+        var startRegion = RegionAt(s, out var startSize);
+        var goalRegion = RegionAt(g, out var goalSize);
+        if (startRegion == goalRegion)
+        {
+            snappedStart = s;
+            snappedGoal = g;
+            return true;
+        }
+
+        var moveStart = TryClosestPoint(start, maxDistance, goalRegion, out var s2) ? Vector3.Distance(s2, start) : float.MaxValue;
+        var moveGoal = TryClosestPoint(goal, maxDistance, startRegion, out var g2) ? Vector3.Distance(g2, goal) : float.MaxValue;
+        if (moveStart == float.MaxValue && moveGoal == float.MaxValue)
+        {
+            failure = $"start and goal are on separate parts of the floor ({startSize} and {goalSize} polygons) with none shared within {maxDistance} m";
+            return false;
+        }
+
+        if (moveStart <= moveGoal)
+        {
+            snappedStart = s2;
+            snappedGoal = g;
+        }
+        else
+        {
+            snappedStart = s;
+            snappedGoal = g2;
+        }
+
+        return true;
+    }
+
+    private bool TryClosestPoint(Vector3 point, float maxDistance, int region, out Vector3 closest)
+    {
         closest = point;
         var best = maxDistance;
         var found = false;
@@ -130,6 +233,11 @@ internal sealed class NavGraph
 
                 foreach (var i in candidates)
                 {
+                    if (region >= 0 && _region[i] != region)
+                    {
+                        continue;
+                    }
+
                     var poly = _polys[i];
                     Vector3 onPoly;
                     if (TryHeightInside(poly, point.x, point.z, out var y))

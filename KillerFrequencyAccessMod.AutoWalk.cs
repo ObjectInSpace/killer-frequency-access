@@ -58,6 +58,9 @@ public sealed partial class KillerFrequencyAccessMod
     /// </summary>
     private const float WalkCornerReachedHeightMeters = 0.6f;
 
+    /// <summary>A route failed because the two ends are on separate parts of the walking graph.</summary>
+    private bool _walkFloorNotConnected;
+
     private void StartAutoWalkToSelectedTarget()
     {
         var target = GetListWalkTarget();
@@ -133,6 +136,7 @@ public sealed partial class KillerFrequencyAccessMod
         // Posture decides reach (desk buttons are out of sight crouched, things under furniture only
         // crouched), so spots are searched in both postures and the walk takes the spot's posture.
         _sightBlockers.Clear();
+        _walkFloorNotConnected = false;
         FindStandpointsBothPostures(origin, target);
         _walkStandpointIndex = 0;
         BeginWalkPosture();
@@ -144,7 +148,9 @@ public sealed partial class KillerFrequencyAccessMod
         if (!PlanWalk(GetFeet(origin), target, "start"))
         {
             StopAutoWalk($"no path to {name}");
-            SpeakWalk($"No path to {name}");
+            SpeakWalk(_walkFloorNotConnected
+                ? $"No path to {name}: the floor where you stand does not connect to it"
+                : $"No path to {name}");
             return;
         }
 
@@ -195,20 +201,16 @@ public sealed partial class KillerFrequencyAccessMod
             return false;
         }
 
-        if (!graph.TryClosestPoint(from, NavSnapMeters, out var start))
+        if (!graph.TrySnapConnected(from, goal, NavSnapMeters, out var start, out var end, out var snapFailure))
         {
-            MelonLoader.MelonLogger.Msg($"[walk] {reason}: the player at {from} is not within {NavSnapMeters} m of {graph.Name}");
-            return false;
-        }
-
-        if (!graph.TryClosestPoint(goal, NavSnapMeters, out var end))
-        {
-            MelonLoader.MelonLogger.Msg($"[walk] {reason}: {GetSpokenName(target)} at {goal} is not within {NavSnapMeters} m of {graph.Name}");
+            _walkFloorNotConnected |= snapFailure.StartsWith("start and goal are on separate", StringComparison.Ordinal);
+            MelonLoader.MelonLogger.Msg($"[walk] {reason}: {GetSpokenName(target)}: {snapFailure} ({graph.Name})");
             return false;
         }
 
         if (!graph.TryRoute(start, end, _walkCorners, out var searched, out var failure))
         {
+            _walkFloorNotConnected |= failure == "polygons not connected";
             MelonLoader.MelonLogger.Msg($"[walk] {reason}: no route to {GetSpokenName(target)} on {graph.Name}: {failure} ({searched} polygons searched)");
             return false;
         }
