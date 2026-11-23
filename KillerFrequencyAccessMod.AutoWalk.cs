@@ -49,7 +49,6 @@ public sealed partial class KillerFrequencyAccessMod
     private readonly List<Vector3> _walkStandpoints = new();
     private int _walkStandpointIndex;
     private const float AimObserveWaitSeconds = 1.0f;
-    private bool _walkPostureCrouched;
 
     /// <summary>
     /// A corner counts as reached only within this height of the player's feet. Corners are reached in
@@ -88,23 +87,11 @@ public sealed partial class KillerFrequencyAccessMod
         _walkAiming = false;
         _walkStuckReplans = 0;
         CollectWalkDoors();
-        FindStandpoints(origin, target);
+        // Posture decides reach (desk buttons are out of sight crouched, things under furniture only
+        // crouched), so spots are searched in both postures and the walk takes the spot's posture.
+        FindStandpointsBothPostures(origin, target);
         _walkStandpointIndex = 0;
-        _walkPostureCrouched = IsCrouching();
-        if (_walkStandpoints.Count == 0)
-        {
-            // Posture decides reach: desk buttons and slots are out of sight crouched (0.9 m eye), things
-            // under furniture only crouched. The user found walks failing in one posture and working after
-            // switching, so the other posture is checked before walking.
-            var otherPosture = DescribeOtherPosture(origin, target);
-            if (otherPosture.Length > 0)
-            {
-                StopAutoWalk("no usable spot in this posture; the other posture has some");
-                SpeakSelectionText($"Cannot reach {name} {(IsCrouching() ? "while crouching" : "while standing")}. {otherPosture}");
-                return;
-            }
-        }
-
+        BeginWalkPosture();
         if (!PlanWalk(origin.position, target, "start"))
         {
             StopAutoWalk($"no path to {name}");
@@ -216,22 +203,6 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var now = Time.unscaledTime;
-            if (IsCrouching() != _walkPostureCrouched)
-            {
-                // The spots were chosen for the other eye height; choose again for this one.
-                _walkPostureCrouched = IsCrouching();
-                FindStandpoints(origin, target);
-                _walkStandpointIndex = 0;
-                _walkAiming = false;
-                if (!PlanWalk(origin.position, target, _walkPostureCrouched ? "crouched mid-walk" : "stood up mid-walk"))
-                {
-                    StopAutoWalk("no path after posture change");
-                    SpeakSelectionText($"No path to {GetSpokenName(target)}");
-                }
-
-                return;
-            }
-
             var camera = GetInteractorCamera();
             var cameraPosition = camera != null ? camera.transform.position : origin.position;
             var nearest = GetNearestPoint(target, cameraPosition);
@@ -247,6 +218,9 @@ public sealed partial class KillerFrequencyAccessMod
             {
                 return;
             }
+
+            // Stand to walk; take the spot's posture for the last stretch.
+            UpdateWalkPosture(origin, RemainingRouteMeters(GetFeet(origin)) <= WalkStandBeyondMeters);
 
             // Walking along the NavMesh route.
             var corner = _walkCorners[_walkCornerIndex];
@@ -312,6 +286,14 @@ public sealed partial class KillerFrequencyAccessMod
             MelonLoader.MelonLogger.Msg($"[walk] aiming at {GetSpokenName(target)} from spot {_walkStandpointIndex + 1} of {_walkStandpoints.Count}");
         }
 
+        if (UpdateWalkPosture(origin, finalStretch: true))
+        {
+            // The eye is moving to the spot's height; aim from there once it has settled.
+            _walkAimStartTime = now;
+            _walkAimedTime = -1f;
+            return;
+        }
+
         var remaining = AimAt(ResolveInteractionAimPoint(target), deltaTime);
         if (remaining <= AimSettleDegrees && _walkAimedTime < 0f)
         {
@@ -349,8 +331,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         StopAutoWalk($"no spot worked (game observes {observed})");
-        var postureHint = DescribeOtherPosture(origin, target);
-        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}{(postureHint.Length > 0 ? ". " + postureHint : string.Empty)}");
+        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
     }
 
     /// <summary>The game's own move mode: FlatScreenPlayer.currentMoveMode is CROUCH.</summary>
@@ -512,30 +493,6 @@ public sealed partial class KillerFrequencyAccessMod
         var from = origin.position;
         spots.Sort((a, b) => Vector3.Distance(from, a).CompareTo(Vector3.Distance(from, b)));
         MelonLoader.MelonLogger.Msg($"[walk] {spots.Count} usable spots {posture} for {GetSpokenName(target)} ({tested} NavMesh points tested, {tooSteep} past the {pitchLimit:0.#} degree view limit, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
-    }
-
-    /// <summary>
-    /// Whether the other posture (crouching when standing, standing when crouched) has usable spots,
-    /// with the spoken instruction to switch. Empty when it has none or the game's heights are unknown.
-    /// </summary>
-    private string DescribeOtherPosture(Transform origin, Transform target)
-    {
-        if (!TryGetEyeHeights(out var standing, out var crouched))
-        {
-            return string.Empty;
-        }
-
-        var crouching = IsCrouching();
-        var other = new List<Vector3>();
-        FindStandpoints(origin, target, crouching ? standing : crouched, other, crouching ? "standing (other posture)" : "crouching (other posture)");
-        if (other.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var keys = DescribeKeys("Gameplay_Crouch");
-        var with = keys.Length == 0 ? string.Empty : $" with {keys}";
-        return crouching ? $"Reachable standing. Stand up{with}, then walk again" : $"Reachable crouching. Crouch{with}, then walk again";
     }
 
     /// <summary>
