@@ -8,9 +8,10 @@ namespace Killer_Frequency_Access;
 /// <summary>
 /// Auto-walk to the selected target, built on game facts:
 /// - Route: the scene's baked NavMesh (SCN_Main NavMesh_0, Intro/Menu NavMesh_1, Epilogue NavMesh).
-///   The game strips NavMeshPath, so NavMesh.CalculatePath cannot be called; the route is an A* search
-///   over a 0.5 m lattice where each node is NavMesh.SamplePosition and each step must pass
-///   NavMesh.Raycast (no NavMesh edge between the two points), then shortened with the same raycast.
+///   The game strips NavMeshPath and CalculateTriangulation, so the polygons come from the rip
+///   (NavGraph, tools\rip\gen_navmesh.py): A* over polygons, funnel through their shared edges. The
+///   graph is used only when it matches the live NavMesh; otherwise an A* over a 0.5 m lattice of
+///   NavMesh.SamplePosition points, which could not climb the ~40 degree stairs between floors.
 ///   Followed corner by corner with the player's CharacterController.
 /// - View: the game's CameraHandler.ResetToRotation (the CameraHandler under the player). The
 ///   game's look update owns the camera, so writing the camera transform directly is overwritten
@@ -590,6 +591,80 @@ public sealed partial class KillerFrequencyAccessMod
             corners.Add(goal);
             return true;
         }
+
+        var graph = GetLiveNavGraph();
+        if (graph != null)
+        {
+            var routed = graph.TryRoute(start, goal, corners, out expanded, out var failure);
+            if (!routed)
+            {
+                MelonLoader.MelonLogger.Msg($"[walk] {graph.Name}: {failure} ({expanded} polygons searched)");
+            }
+
+            return routed;
+        }
+
+        return TryFindLatticeRoute(start, goal, corners, out expanded);
+    }
+
+    private static List<NavGraph>? _navGraphs;
+    private static NavGraph? _liveNavGraph;
+    private static string? _liveNavGraphKey;
+    private const int NavGraphSamples = 16;
+
+    /// <summary>
+    /// The rip graph that matches the live NavMesh, re-checked when the loaded scenes change. Null (and
+    /// the lattice search is used) when no graph has all but one of its samples on the live NavMesh.
+    /// </summary>
+    private static NavGraph? GetLiveNavGraph()
+    {
+        var key = string.Empty;
+        for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+        {
+            key += UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).name + "|";
+        }
+
+        if (key == _liveNavGraphKey)
+        {
+            return _liveNavGraph;
+        }
+
+        _liveNavGraphKey = key;
+        _liveNavGraph = null;
+        try
+        {
+            _navGraphs ??= NavGraph.LoadAll();
+        }
+        catch (Exception ex)
+        {
+            MelonLoader.MelonLogger.Warning($"[nav] could not load the walking graphs: {ex.Message}");
+            _navGraphs = new List<NavGraph>();
+        }
+
+        var report = new List<string>();
+        var bestMatches = -1;
+        foreach (var graph in _navGraphs)
+        {
+            var matches = graph.CountLiveMatches(NavGraphSamples);
+            report.Add($"{graph.Name} {matches}/{NavGraphSamples}");
+            if (matches >= NavGraphSamples - 1 && matches > bestMatches)
+            {
+                _liveNavGraph = graph;
+                bestMatches = matches;
+            }
+        }
+
+        MelonLoader.MelonLogger.Msg(_liveNavGraph != null
+            ? $"[nav] scenes {key.TrimEnd('|')}: routing over {_liveNavGraph.Name} ({_liveNavGraph.PolygonCount} polygons; samples on the live NavMesh: {string.Join(", ", report)})"
+            : $"[nav] scenes {key.TrimEnd('|')}: no walking graph matches the live NavMesh ({string.Join(", ", report)}); using the lattice search");
+        return _liveNavGraph;
+    }
+
+    /// <summary>Fallback when no rip graph matches the live NavMesh.</summary>
+    private static bool TryFindLatticeRoute(Vector3 start, Vector3 goal, List<Vector3> corners, out int expanded)
+    {
+        corners.Clear();
+        expanded = 0;
 
         (int X, int Z, int Y) Key(Vector3 p) => (Mathf.RoundToInt(p.x / RouteCellMeters), Mathf.RoundToInt(p.z / RouteCellMeters), Mathf.RoundToInt(p.y / 1.0f));
 

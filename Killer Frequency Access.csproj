@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Walking graphs from the rip's NavMesh assets (tools\rip\gen_navmesh.py). -->
+    <EmbeddedResource Include="Generated\Nav\*.navbin.gz" LogicalName="Nav.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="MelonLoader">
       <HintPath>$(MelonLoaderDir)\net6\MelonLoader.dll</HintPath>
       <Private>false</Private>
