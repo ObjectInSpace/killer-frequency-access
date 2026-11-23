@@ -15,4 +15,13 @@ Run Python with `-I`. Scene pickles are large; keep them in a scratch folder, no
 - `fileid.py <Namespace.Class>...`: the `m_Script` fileID Unity uses for a class from a DLL.
 - `guidmap.txt`: script GUID to script file, from the rip's `.meta` files.
 
+These read the game's own files with UnityPy (the rip has no textures and no string values):
+
+- `extract_textures.py <KillerFrequency_Data> <out_dir> <Material,...>`: save the named materials'
+  base textures as PNG (to describe pictures by hand for `ImageDescriptions.cs`).
+- `dump_strings.py <StreamingAssets/aa/StandaloneWindows64> <out.json>`: every English string as
+  `Collection:Key` -> text (dialogue, GameText panels).
+- `gen_gametext_keys.py <StreamingAssets/aa/StandaloneWindows64> <out.cs>`: `Generated\GameTextKeys.cs`,
+  GameText key id -> entry name.
+
 After a game update: re-rip, rerun `scene_parse.py` for the four scenes, then `gen_names.py` and `gen_navmesh.py`.

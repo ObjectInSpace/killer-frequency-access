@@ -118,6 +118,15 @@ public sealed partial class KillerFrequencyAccessMod
                 }
             }
 
+            _worldTextDetectors.Clear();
+            foreach (var detector in Resources.FindObjectsOfTypeAll<Il2Cpp.DiegeticTextDetector>())
+            {
+                if (detector != null && detector.gameObject.scene.IsValid())
+                {
+                    _worldTextDetectors.Add(detector);
+                }
+            }
+
             if (_diegeticDisplays.Count != count)
             {
                 LoggerInstance.Msg($"[worldtext] {_diegeticDisplays.Count} diegetic text displays: {string.Join(", ", _diegeticDisplays.ConvertAll(d => d.name))}");
@@ -137,6 +146,11 @@ public sealed partial class KillerFrequencyAccessMod
 
             var shown = display._state == Il2Cpp.DiegeticTextDisplay.State.FullyShown && display.gameObject.activeInHierarchy;
             var text = shown && display._textComponent != null ? NormalizeText(display._textComponent.text) : string.Empty;
+            if (text.Length > 0 && DescribePanelPicture(display) is { } picture)
+            {
+                text = $"{text}. {picture}";
+            }
+
             if (SpeakWorldTextIfChanged($"diegetic|{display.GetInstanceID()}", text) && text.Length > 0)
             {
                 LoggerInstance.Msg($"[worldtext] read from display {display.name}");
@@ -144,6 +158,125 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         LogInspectedPageList();
+        UpdateInspectedPicture();
+    }
+
+    // Pictures (ImageDescriptions, hand-written from the game's textures). A text panel's source is the
+    // DiegeticTextLocalizer the game opened on it: DiegeticTextDetector._openedLocalizer for its
+    // _textDisplay (looking at things in the world), or FsInspectDiegeticTextDetector.inspectedLocalizers
+    // (hostingDisplay, while inspecting). Its LocalizedString names a GameText entry, usually by key id;
+    // Generated\GameTextKeys.cs turns the id into the entry name the descriptions are keyed on.
+    private readonly List<Il2Cpp.DiegeticTextDetector> _worldTextDetectors = new();
+    private int _describedInspectedId;
+
+    private string? DescribePanelPicture(Il2Cpp.DiegeticTextDisplay display)
+    {
+        var displayId = display.GetInstanceID();
+        Il2Cpp.DiegeticTextLocalizer? localizer = null;
+        foreach (var detector in _worldTextDetectors)
+        {
+            if (detector != null && detector._textDisplay != null && detector._textDisplay.GetInstanceID() == displayId)
+            {
+                localizer = detector._openedLocalizer;
+                break;
+            }
+        }
+
+        var pages = _inspectDetector?.inspectedLocalizers;
+        for (var i = 0; localizer == null && pages != null && i < pages.Count; i++)
+        {
+            var page = pages[i];
+            if (page?.hostingDisplay != null && page.hostingDisplay.GetInstanceID() == displayId && page.IsOpened())
+            {
+                localizer = page.localizer;
+            }
+        }
+
+        if (localizer == null)
+        {
+            LogOnce($"picture-nosource|{display.name}", $"[pictures] no source text found for display {display.name}");
+            return null;
+        }
+
+        var entry = GameTextEntryName(localizer);
+        if (entry == null)
+        {
+            return null;
+        }
+
+        if (ImageDescriptions.ByGameTextKey.TryGetValue(entry, out var picture))
+        {
+            return picture;
+        }
+
+        LogOnce($"picture-none|{entry}", $"[pictures] text panel {entry} has no picture description");
+        return null;
+    }
+
+    private static string? GameTextEntryName(Il2Cpp.DiegeticTextLocalizer localizer)
+    {
+        var text = localizer.LocalizedStringToDisplay;
+        if (text == null)
+        {
+            return null;
+        }
+
+        var table = text.TableReference.m_TableCollectionName ?? string.Empty;
+        if (table != "GameText" && table != "GUID:" + GameTextKeys.TableGuid)
+        {
+            LogOnce($"picture-table|{table}", $"[pictures] {localizer.name} reads table {table}, not GameText");
+            return null;
+        }
+
+        var reference = text.TableEntryReference;
+        switch (reference.ReferenceType)
+        {
+            case UnityEngine.Localization.Tables.TableEntryReference.Type.Name:
+                return reference.Key;
+            case UnityEngine.Localization.Tables.TableEntryReference.Type.Id:
+                if (GameTextKeys.NameById.TryGetValue(reference.KeyId, out var name))
+                {
+                    return name;
+                }
+
+                LogOnce($"picture-id|{reference.KeyId}", $"[pictures] GameText key id {reference.KeyId} not in GameTextKeys");
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Speaks the picture of an inspected item that has no text of its own (polaroids, map markers).</summary>
+    private void UpdateInspectedPicture()
+    {
+        var handler = _inspectDetector?.fsInspectHandler;
+        if (handler == null || handler.phase != Il2Cpp.FsInspectHandler.Phase.Active)
+        {
+            _describedInspectedId = 0;
+            return;
+        }
+
+        if (!TryGetHeld(out var primary, out _) || primary == null)
+        {
+            return;
+        }
+
+        var id = primary.GetInstanceID();
+        if (id == _describedInspectedId)
+        {
+            return;
+        }
+
+        _describedInspectedId = id;
+        for (var current = primary.transform; current != null; current = current.parent)
+        {
+            if (ImageDescriptions.ByObjectName.TryGetValue(current.name, out var picture))
+            {
+                SpeakSelectionText(picture);
+                LoggerInstance.Msg($"[pictures] described inspected {current.name}");
+                return;
+            }
+        }
     }
 
     // Tutorial panels standing in the world (Il2Cpp.TutorialAnchor; SCN_Main has 12: crouch, object tray,

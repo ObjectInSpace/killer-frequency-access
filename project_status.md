@@ -251,7 +251,53 @@ answer offline first; ask for a run only when the answer exists only at runtime.
   whether `ConfigureForMoveMode` alone behaves like the crouch key; detours around obstacles; the sweep;
   the walking graphs of SCN_Intro, SCN_Menu and SCN_Epilogue.
 - Deferred (user, 2026-11-23): pinboard items and post-its have no standing spots. The pinboard has its
-  own first-person scope in the game and needs a separate investigation.
+  own first-person scope in the game and needs a separate investigation. Findings below.
+
+## Boards and maps (investigation 2026-11-23, offline)
+
+The visual content is in textures. The AssetRipper rip has none (`Texture2D` is empty), so
+`tools\rip\extract_textures.py` reads them from the game with UnityPy. `tools\rip\dump_strings.py` dumps
+all 7,146 English strings (`Collection:Key`) from the localization bundles; the dialogue is there.
+`DiegeticTextLocalizer._displayText` is not serialised in the rip (374 components, all empty), so label
+text exists only at runtime (`LocalizedStringToDisplay`).
+
+- **Boards** (`Il2Cpp.Board`, three in SCN_Main): a plane with x/y limits, `_docks`, `_boardItems`.
+  `BoardItem` has `_fact` (a FactAsset; `Board.UpdateAvailableNotes` shows items as facts become known),
+  `_movableDock` (player drags it around the board) and `ItemDock`. No strings link items; the player's
+  arrangement is free.
+  - Alibi board, two copies (Janitor's office in the basement, `..._WheeledDJRoom` in the main studio):
+    14 movable clippings, 1 fixed class-of-69 yearbook page, 8 fixed post-its (1 Chuck Brody, 2 Kim
+    Walker, 3 Rebecca Allen, 4 Ant Williams; Gas Station, Power Station, Hospital, Trailer Park). Each item
+    is a patch of atlas `T_AlibiBoard_Final_01` / `_02` (mesh UVs). The puzzle is answered in dialogue
+    (`Alibi:AL_Choice_Name_*`, `AL_Choice_Location_*`), so the player needs each item's content: headlines,
+    dates, article text, and the picture (e.g. the yearbook circles Kim Walker, Rebecca Allen, Ant Williams
+    and Chuck Brody in red; one polaroid is a bomb/pipe photo).
+  - Gallows Creek map board (`P_HeroProp_GallowsCreekMap`): 89 `DiegeticTextLocalizer` labels (places and
+    streets, positioned on the map), movable markers A-E and pin tacks 1-5, fixed location-hint cards
+    (Alex: Haddonfield Road at Romero Street; Katherine: west end of Myers Lane; Old Man Jericho: east end
+    of Myers Lane; Fire Department) and a traffic notice (east Macready Street closed between Rogers
+    Avenue and Haddonfield Road). Map texture `T_GallowsCreekMap_AlbedoTransparency`; a second copy is a
+    poster.
+- **Maize maze map** (`P_HeroProp_Interactable_MaizeMaze`, texture `T_MaizeMaze_AlbedoTransparency`):
+  an image only, no labels. A grid maze with an entrance/exit at the top and ten numbered landmarks
+  (1 Tractor Statue, 2 Golden Hay Bales, 3 Pig Statue, 4 Realistic Looking Horse Statue, 5 Pitchfork
+  Statue, 6 Scarecrow, 7 Farmer Hat, 8 Mini Barn, 9 Corn Silo, 10 Bee Hives). Dialogue gives Eugene's
+  surroundings (`MaizeMaze:MM_Prompt_Directions_01..05`, e.g. "pig statue in front and rocking horse to
+  his left") and the player picks left / forward / right / backwards. The paired note
+  (`..._MaizeMazeMapLocationClue`) is Brad's letter to Barb.
+- **Built (2026-11-23, not run in game):** pictures are described, not navigated (user design: people ask
+  about these places later, and the player must be able to tell them where to go). `ImageDescriptions.cs`
+  is a hand-written table keyed on the game's own GameText entry name; the description is spoken after the
+  panel's text. The entry comes from the localizer the game opened on the panel
+  (`DiegeticTextDetector._openedLocalizer` / `FsInspectDiegeticTextDetector.inspectedLocalizers`) and its
+  `TableEntryReference` (key id -> name via `Generated\GameTextKeys.cs`). Items with no text (polaroids,
+  map markers, pin tacks) are described when inspection reaches `FsInspectHandler.Phase.Active`, keyed on
+  the object's or an ancestor's name. Covered: maze map (with the route from the Maize_Sequence graph),
+  every Gallows Creek map label, the hint cards and traffic notice, every alibi board item, the Save Clive
+  polaroids. `[pictures]` logs panels without a description, unknown key ids, other tables, and
+  displays whose source was not found.
+- **Save Clive evidence maps** (`P_HeroProp_Interactable_Clive_EvidenceMap_Location_01..06`, one atlas):
+  six polaroids of basement spots, each with a drawn arrow to a cassette and, on two, a notebook.
 
 - Whether `Room.volumes` cover every object, or some land in no room.
 - Whether `CanPerform` needs the item to be hovered (logged by `[observed]`).
