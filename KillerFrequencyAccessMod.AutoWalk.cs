@@ -87,6 +87,7 @@ public sealed partial class KillerFrequencyAccessMod
         _isAutoWalking = true;
         _walkAiming = false;
         _walkStuckReplans = 0;
+        CollectWalkDoors();
         FindStandpoints(origin, target);
         _walkStandpointIndex = 0;
         _walkPostureCrouched = IsCrouching();
@@ -242,6 +243,11 @@ public sealed partial class KillerFrequencyAccessMod
                 return;
             }
 
+            if (HandleDoorsOnRoute(origin, now))
+            {
+                return;
+            }
+
             // Walking along the NavMesh route.
             var corner = _walkCorners[_walkCornerIndex];
             if (IsCornerReached(GetFeet(origin), corner))
@@ -264,6 +270,7 @@ public sealed partial class KillerFrequencyAccessMod
                 else if (now - _walkProgressTime >= WalkStuckSeconds)
                 {
                     _walkStuckReplans++;
+                    LogWalkStall(origin);
                     if (_walkStuckReplans > WalkMaxStuckReplans)
                     {
                         StopAutoWalk("stuck");
@@ -865,6 +872,37 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Where a stalled walk is relative to its route (Date Everything Access logs the same for stall
+    /// triage): feet, the leg being walked, how far off that leg the feet are, the nearest closed room
+    /// door, and whether the feet are still on the NavMesh.
+    /// </summary>
+    private void LogWalkStall(Transform origin)
+    {
+        var feet = GetFeet(origin);
+        var legStart = _walkCornerIndex > 0 ? _walkCorners[_walkCornerIndex - 1] : _walkProgressPosition;
+        var corner = _walkCornerIndex < _walkCorners.Count ? _walkCorners[_walkCornerIndex] : feet;
+        var leg = new Vector2(corner.x - legStart.x, corner.z - legStart.z);
+        var toFeet = new Vector2(feet.x - legStart.x, feet.z - legStart.z);
+        var t = leg.sqrMagnitude < 1e-6f ? 0f : Mathf.Clamp01(Vector2.Dot(toFeet, leg) / leg.sqrMagnitude);
+        var offRoute = (toFeet - leg * t).magnitude;
+        var onMesh = NavMesh.SamplePosition(feet, out var meshHit, 0.3f, NavMesh.AllAreas)
+            ? $"on NavMesh ({Vector3.Distance(meshHit.position, feet):0.00} m)"
+            : "off NavMesh";
+        var doorText = "no closed room door within 2 m";
+        foreach (var portal in _walkDoors)
+        {
+            if (portal != null && portal._door != null && !portal._door.IsFullyOpen()
+                && Vector3.Distance(portal.transform.position, feet) < 2f)
+            {
+                doorText = $"closed room door {GetSpokenName(portal._door.transform)} {Vector3.Distance(portal.transform.position, feet):0.0} m away (open {portal._door.HowOpen():0.00}, locked {portal._door.IsLocked()})";
+                break;
+            }
+        }
+
+        MelonLoader.MelonLogger.Msg($"[walk] stall {_walkStuckReplans}: feet {feet}, corner {_walkCornerIndex + 1} of {_walkCorners.Count} at {corner} ({PlanarDistance(feet, corner):0.00} m, height {corner.y - feet.y:+0.00;-0.00}), {offRoute:0.00} m off the leg, {t:0%} along it, {onMesh}, {doorText}");
     }
 
     /// <summary>Within reach of the corner in x/z, at its height (feet and corner are both floor points).</summary>
