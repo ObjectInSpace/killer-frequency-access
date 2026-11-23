@@ -4,7 +4,9 @@ Last updated: 2026-11-23
 
 ## State
 
-Unreleased. Loads in MelonLoader, speaks through Prism (v0.18.3, `native\win-x64\prism.dll`, next to the mod in Mods), reads menus. Targeting has been rebuilt on
+Unreleased. Loads in MelonLoader, speaks through Prism (v0.18.4, `native\win-x64\prism.dll`, next to the mod in Mods) via the
+Prism.Net bindings (`third_party\Prism.Net`, compiled into the mod), reads menus. A screen reader started
+or stopped mid-game is picked up from Prism's availability polling. Targeting has been rebuilt on
 the game's own types (2026-11-04): all name, collider, interaction and handler guessing is gone
 (`WorldNavigation.cs` went from about 4,800 lines to about 2,100). The installed DLL is that build;
 it has not been run yet.

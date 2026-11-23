@@ -5,6 +5,8 @@
     <RootNamespace>Killer_Frequency_Access</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- third_party/Prism.Net uses unsafe code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GameDir>D:\SteamLibrary\steamapps\Common\Killer Frequency</GameDir>
     <MelonLoaderDir>$(GameDir)\MelonLoader</MelonLoaderDir>
     <Il2CppAssembliesDir>$(MelonLoaderDir)\Il2CppAssemblies</Il2CppAssembliesDir>
