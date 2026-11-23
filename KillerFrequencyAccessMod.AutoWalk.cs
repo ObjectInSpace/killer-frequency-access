@@ -49,6 +49,15 @@ public sealed partial class KillerFrequencyAccessMod
     private readonly List<Vector3> _walkStandpoints = new();
     private int _walkStandpointIndex;
     private const float AimObserveWaitSeconds = 1.0f;
+    private bool _walkPostureCrouched;
+
+    /// <summary>
+    /// A corner counts as reached only within this height of the player's feet. Corners are reached in
+    /// x/z, and on stairs a landing's corner can lie right above or below the player (Date Everything
+    /// Access: the ground landing counted as reached from the floor below). Stair runs in SCN_Main rise
+    /// 2.3 m over 2.75 m, so 0.6 m keeps the check to the player's own stretch of stairs.
+    /// </summary>
+    private const float WalkCornerReachedHeightMeters = 0.6f;
 
     private void StartAutoWalkToSelectedTarget()
     {
@@ -80,19 +89,25 @@ public sealed partial class KillerFrequencyAccessMod
         _walkStuckReplans = 0;
         FindStandpoints(origin, target);
         _walkStandpointIndex = 0;
-        if (_walkStandpoints.Count == 0 && IsCrouching())
+        _walkPostureCrouched = IsCrouching();
+        if (_walkStandpoints.Count == 0)
         {
-            // 0.9 m crouched eye height: in the 2026-11-19 evening run about 60 of 100 failed walks were
-            // crouched, most with 0 usable spots (desk buttons and slots are out of sight below the desk edge).
-            StopAutoWalk("crouching, no usable spot");
-            SpeakSelectionText($"Cannot reach {name} while crouching. {DescribeStandUp()}, then walk again");
-            return;
+            // Posture decides reach: desk buttons and slots are out of sight crouched (0.9 m eye), things
+            // under furniture only crouched. The user found walks failing in one posture and working after
+            // switching, so the other posture is checked before walking.
+            var otherPosture = DescribeOtherPosture(origin, target);
+            if (otherPosture.Length > 0)
+            {
+                StopAutoWalk("no usable spot in this posture; the other posture has some");
+                SpeakSelectionText($"Cannot reach {name} {(IsCrouching() ? "while crouching" : "while standing")}. {otherPosture}");
+                return;
+            }
         }
 
         if (!PlanWalk(origin.position, target, "start"))
         {
             StopAutoWalk($"no path to {name}");
-            SpeakSelectionText($"No path to {name}{CrouchHint()}");
+            SpeakSelectionText($"No path to {name}");
             return;
         }
 
@@ -155,7 +170,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         // Skip corners already reached (the first is the start point).
-        while (_walkCornerIndex < _walkCorners.Count - 1 && PlanarDistance(from, _walkCorners[_walkCornerIndex]) <= WalkCornerReachedMeters)
+        while (_walkCornerIndex < _walkCorners.Count - 1 && IsCornerReached(startHit.position, _walkCorners[_walkCornerIndex]))
         {
             _walkCornerIndex++;
         }
@@ -200,6 +215,22 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var now = Time.unscaledTime;
+            if (IsCrouching() != _walkPostureCrouched)
+            {
+                // The spots were chosen for the other eye height; choose again for this one.
+                _walkPostureCrouched = IsCrouching();
+                FindStandpoints(origin, target);
+                _walkStandpointIndex = 0;
+                _walkAiming = false;
+                if (!PlanWalk(origin.position, target, _walkPostureCrouched ? "crouched mid-walk" : "stood up mid-walk"))
+                {
+                    StopAutoWalk("no path after posture change");
+                    SpeakSelectionText($"No path to {GetSpokenName(target)}");
+                }
+
+                return;
+            }
+
             var camera = GetInteractorCamera();
             var cameraPosition = camera != null ? camera.transform.position : origin.position;
             var nearest = GetNearestPoint(target, cameraPosition);
@@ -213,7 +244,7 @@ public sealed partial class KillerFrequencyAccessMod
 
             // Walking along the NavMesh route.
             var corner = _walkCorners[_walkCornerIndex];
-            if (PlanarDistance(origin.position, corner) <= WalkCornerReachedMeters)
+            if (IsCornerReached(GetFeet(origin), corner))
             {
                 _walkCornerIndex++;
                 return;
@@ -236,14 +267,14 @@ public sealed partial class KillerFrequencyAccessMod
                     if (_walkStuckReplans > WalkMaxStuckReplans)
                     {
                         StopAutoWalk("stuck");
-                        SpeakSelectionText($"Stuck. {GetSpokenName(target)} is {DescribeWhere(origin, nearest)}{CrouchHint()}");
+                        SpeakSelectionText($"Stuck. {GetSpokenName(target)} is {DescribeWhere(origin, nearest)}");
                         return;
                     }
 
                     if (!PlanWalk(origin.position, target, $"replan (stuck {_walkStuckReplans})"))
                     {
                         StopAutoWalk("no path on replan");
-                        SpeakSelectionText($"No path to {GetSpokenName(target)}{CrouchHint()}");
+                        SpeakSelectionText($"No path to {GetSpokenName(target)}");
                     }
 
                     return;
@@ -311,7 +342,8 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         StopAutoWalk($"no spot worked (game observes {observed})");
-        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}{CrouchHint()}");
+        var postureHint = DescribeOtherPosture(origin, target);
+        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}{(postureHint.Length > 0 ? ". " + postureHint : string.Empty)}");
     }
 
     /// <summary>The game's own move mode: FlatScreenPlayer.currentMoveMode is CROUCH.</summary>
@@ -321,49 +353,77 @@ public sealed partial class KillerFrequencyAccessMod
         return player != null && player.currentMoveMode == Il2Cpp.PlayerMoveModes.CROUCH;
     }
 
-    private static string DescribeStandUp()
+    /// <summary>
+    /// The game's eye heights above the feet: PlayerBase.playerHeight, _maxPlayerHeight standing (1.6 in
+    /// SCN_Main) and _minPlayerHeight crouched (0.9); the logs measured 1.60 and 0.90.
+    /// </summary>
+    private static bool TryGetEyeHeights(out float standing, out float crouched)
     {
-        var keys = DescribeKeys("Gameplay_Crouch");
-        return keys.Length == 0 ? "Stand up" : $"Stand up with {keys}";
+        standing = crouched = 0f;
+        var player = Il2Cpp.FlatScreenPlayer.instance;
+        if (player == null)
+        {
+            return false;
+        }
+
+        var height = player.playerHeight;
+        standing = height._maxPlayerHeight;
+        crouched = height._minPlayerHeight;
+        return standing > 0f && crouched > 0f;
     }
 
-    private static string CrouchHint()
+    /// <summary>The player's eye height above the feet now, for the posture the game reports.</summary>
+    private static float CurrentEyeHeight(Transform origin)
     {
-        return IsCrouching() ? $". You are crouching. {DescribeStandUp()}" : string.Empty;
+        if (TryGetEyeHeights(out var standing, out var crouched))
+        {
+            return IsCrouching() ? crouched : standing;
+        }
+
+        var camera = GetInteractorCamera();
+        return camera == null ? 1.6f : camera.transform.position.y - GetFeet(origin).y;
+    }
+
+    /// <summary>The game's foot location (PlayerBase.GetFootLocation); the player transform is not at the feet.</summary>
+    private static Vector3 GetFeet(Transform origin)
+    {
+        var player = origin.GetComponent<Il2Cpp.FlatScreenPlayer>() ?? Il2Cpp.FlatScreenPlayer.instance;
+        if (player != null)
+        {
+            return player.GetFootLocation();
+        }
+
+        if (NavMesh.SamplePosition(origin.position, out var footHit, NavMeshSampleMeters, NavMesh.AllAreas))
+        {
+            LogOnce("walk-no-player-feet", "[walk] FlatScreenPlayer.instance is null; feet taken from the NavMesh under the player");
+            return footHit.position;
+        }
+
+        return origin.position;
+    }
+
+    /// <summary>Spots for the current posture into _walkStandpoints.</summary>
+    private void FindStandpoints(Transform origin, Transform target)
+    {
+        FindStandpoints(origin, target, CurrentEyeHeight(origin), _walkStandpoints, IsCrouching() ? "crouching" : "standing");
     }
 
     /// <summary>
-    /// NavMesh points around the target from which the target can be used, nearest to the player first.
-    /// From eye height (the player's current camera height above its feet) the target's nearest collider
-    /// point must be within fsMaxReachDistance, and a raycast toward the aim point with the game's
-    /// interaction mask must hit one of the target's own colliders.
+    /// NavMesh points around the target from which the target can be used at <paramref name="eyeHeight"/>,
+    /// nearest to the player first. The eye there must be within fsMaxReachDistance of the target's nearest
+    /// collider point, the look must be inside the game's pitch limit, and a raycast toward the aim point
+    /// with the game's interaction mask must hit one of the target's own colliders.
+    /// Floor heights at each probe come from the walking graph (every floor under that x/z). Before, the
+    /// probe was sampled at the player's own height, so a target on another floor got 0 spots.
     /// </summary>
-    private void FindStandpoints(Transform origin, Transform target)
+    private void FindStandpoints(Transform origin, Transform target, float eyeHeight, List<Vector3> spots, string posture)
     {
-        _walkStandpoints.Clear();
-        var camera = GetInteractorCamera();
-        if (camera == null || !TryGetGameInteractable(target, out var interactable))
+        spots.Clear();
+        if (!TryGetGameInteractable(target, out var interactable))
         {
             return;
         }
 
-        // Spots are NavMesh (floor) points, so eye height is measured from the game's foot location
-        // (PlayerBase.GetFootLocation). The player transform is not at the feet: measuring from it gave
-        // 0.90 m in the standing-spot run, rays at desk height, and 0 spots for the phone line buttons.
-        var feet = origin.position;
-        // FlatScreenPlayer is on the same PlayerController GameObject as the interactor (rip).
-        var player = origin.GetComponent<Il2Cpp.FlatScreenPlayer>() ?? Il2Cpp.FlatScreenPlayer.instance;
-        if (player != null)
-        {
-            feet = player.GetFootLocation();
-        }
-        else if (NavMesh.SamplePosition(origin.position, out var footHit, NavMeshSampleMeters, NavMesh.AllAreas))
-        {
-            feet = footHit.position;
-            LogOnce("walk-no-player-feet", "[walk] FlatScreenPlayer.instance is null; feet taken from the NavMesh under the player");
-        }
-
-        var eyeHeight = camera.transform.position.y - feet.y;
         var aim = ResolveInteractionAimPoint(target);
         var reach = interactable.fsMaxReachDistance;
         int mask = Il2Cpp.ControllerBaseInteractor.raycastLayerMask.value;
@@ -373,6 +433,11 @@ public sealed partial class KillerFrequencyAccessMod
         var pitchLimit = Il2Cpp.CameraHandler.verticalViewAngleLimit;
         LogOnce($"walk-pitch-limit|{pitchLimit}|{Il2Cpp.CameraHandler.verticalViewAngleLimitSeated}",
             $"[walk] view pitch limit {pitchLimit:0.#} degrees (seated {Il2Cpp.CameraHandler.verticalViewAngleLimitSeated:0.#})");
+        // A floor can hold a usable spot only if an eye above it can be within reach of the aim point.
+        var lowestFloor = aim.y - eyeHeight - reach;
+        var highestFloor = aim.y - eyeHeight + reach;
+        var graph = GetLiveNavGraph();
+        var floors = new List<float>();
         var tested = 0;
         var tooSteep = 0;
         for (var radius = 0.35f; radius <= reach + 0.01f; radius += 0.25f)
@@ -380,51 +445,90 @@ public sealed partial class KillerFrequencyAccessMod
             for (var step = 0; step < 16; step++)
             {
                 var angle = step * Mathf.PI * 2f / 16f;
-                var probe = new Vector3(aim.x + Mathf.Cos(angle) * radius, origin.position.y, aim.z + Mathf.Sin(angle) * radius);
-                if (!NavMesh.SamplePosition(probe, out var hit, 0.5f, NavMesh.AllAreas))
+                var x = aim.x + Mathf.Cos(angle) * radius;
+                var z = aim.z + Mathf.Sin(angle) * radius;
+                floors.Clear();
+                if (graph != null)
                 {
-                    continue;
+                    graph.FloorHeightsAt(x, z, floors);
+                }
+                else if (NavMesh.SamplePosition(new Vector3(x, aim.y - eyeHeight, z), out var sampled, reach, NavMesh.AllAreas))
+                {
+                    floors.Add(sampled.position.y);
                 }
 
-                var spot = hit.position;
-                if (_walkStandpoints.Exists(p => Vector3.Distance(p, spot) < 0.2f))
+                foreach (var floorY in floors)
                 {
-                    continue;
-                }
-
-                tested++;
-                var eye = spot + Vector3.up * eyeHeight;
-                if (Vector3.Distance(eye, GetNearestPoint(target, eye)) > reach)
-                {
-                    continue;
-                }
-
-                var toAim = aim - eye;
-                if (pitchLimit > 0f)
-                {
-                    var pitch = Mathf.Abs(Mathf.Atan2(toAim.y, new Vector2(toAim.x, toAim.z).magnitude) * Mathf.Rad2Deg);
-                    if (pitch > pitchLimit - AimSettleDegrees)
+                    if (floorY < lowestFloor || floorY > highestFloor)
                     {
-                        tooSteep++;
                         continue;
                     }
-                }
 
-                if (!Physics.Raycast(eye, toAim.normalized, out var rayHit, toAim.magnitude + 0.3f, mask)
-                    || rayHit.collider == null
-                    || !TryGetGameInteractable(rayHit.collider.transform, out var hitInteractable)
-                    || hitInteractable.GetInstanceID() != interactable.GetInstanceID())
-                {
-                    continue;
-                }
+                    var spot = new Vector3(x, floorY, z);
+                    if (spots.Exists(p => Vector3.Distance(p, spot) < 0.2f))
+                    {
+                        continue;
+                    }
 
-                _walkStandpoints.Add(spot);
+                    tested++;
+                    var eye = spot + Vector3.up * eyeHeight;
+                    if (Vector3.Distance(eye, GetNearestPoint(target, eye)) > reach)
+                    {
+                        continue;
+                    }
+
+                    var toAim = aim - eye;
+                    if (pitchLimit > 0f)
+                    {
+                        var pitch = Mathf.Abs(Mathf.Atan2(toAim.y, new Vector2(toAim.x, toAim.z).magnitude) * Mathf.Rad2Deg);
+                        if (pitch > pitchLimit - AimSettleDegrees)
+                        {
+                            tooSteep++;
+                            continue;
+                        }
+                    }
+
+                    if (!Physics.Raycast(eye, toAim.normalized, out var rayHit, toAim.magnitude + 0.3f, mask)
+                        || rayHit.collider == null
+                        || !TryGetGameInteractable(rayHit.collider.transform, out var hitInteractable)
+                        || hitInteractable.GetInstanceID() != interactable.GetInstanceID())
+                    {
+                        continue;
+                    }
+
+                    spots.Add(spot);
+                }
             }
         }
 
+        // 3D distance: a spot on the floor above can be right over the player.
         var from = origin.position;
-        _walkStandpoints.Sort((a, b) => PlanarDistance(from, a).CompareTo(PlanarDistance(from, b)));
-        MelonLoader.MelonLogger.Msg($"[walk] {_walkStandpoints.Count} usable spots for {GetSpokenName(target)} ({tested} NavMesh points tested, {tooSteep} past the {pitchLimit:0.#} degree view limit, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
+        spots.Sort((a, b) => Vector3.Distance(from, a).CompareTo(Vector3.Distance(from, b)));
+        MelonLoader.MelonLogger.Msg($"[walk] {spots.Count} usable spots {posture} for {GetSpokenName(target)} ({tested} NavMesh points tested, {tooSteep} past the {pitchLimit:0.#} degree view limit, reach {reach:0.00} m, eye {eyeHeight:0.00} m)");
+    }
+
+    /// <summary>
+    /// Whether the other posture (crouching when standing, standing when crouched) has usable spots,
+    /// with the spoken instruction to switch. Empty when it has none or the game's heights are unknown.
+    /// </summary>
+    private string DescribeOtherPosture(Transform origin, Transform target)
+    {
+        if (!TryGetEyeHeights(out var standing, out var crouched))
+        {
+            return string.Empty;
+        }
+
+        var crouching = IsCrouching();
+        var other = new List<Vector3>();
+        FindStandpoints(origin, target, crouching ? standing : crouched, other, crouching ? "standing (other posture)" : "crouching (other posture)");
+        if (other.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var keys = DescribeKeys("Gameplay_Crouch");
+        var with = keys.Length == 0 ? string.Empty : $" with {keys}";
+        return crouching ? $"Reachable standing. Stand up{with}, then walk again" : $"Reachable crouching. Crouch{with}, then walk again";
     }
 
     /// <summary>
@@ -761,6 +865,13 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         return true;
+    }
+
+    /// <summary>Within reach of the corner in x/z, at its height (feet and corner are both floor points).</summary>
+    private static bool IsCornerReached(Vector3 feet, Vector3 corner)
+    {
+        return PlanarDistance(feet, corner) <= WalkCornerReachedMeters
+            && Math.Abs(feet.y - corner.y) <= WalkCornerReachedHeightMeters;
     }
 
     private static float PlanarDistance(Vector3 a, Vector3 b)

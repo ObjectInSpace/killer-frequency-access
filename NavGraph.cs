@@ -142,6 +142,23 @@ internal sealed class NavGraph
         return sum / poly.Length;
     }
 
+    /// <summary>The height of every polygon (every floor) whose x/z covers the point.</summary>
+    public void FloorHeightsAt(float x, float z, List<float> heights)
+    {
+        if (!_grid.TryGetValue((Cell(x), Cell(z)), out var candidates))
+        {
+            return;
+        }
+
+        foreach (var i in candidates)
+        {
+            if (TryHeightInside(_polys[i], x, z, out var y) && !heights.Exists(h => Math.Abs(h - y) < 0.1f))
+            {
+                heights.Add(y);
+            }
+        }
+    }
+
     /// <summary>The polygon under a NavMesh point: inside it in x/z, with the closest height (within 0.5 m).</summary>
     public int Locate(Vector3 point)
     {
