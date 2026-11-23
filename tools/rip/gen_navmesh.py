@@ -89,6 +89,11 @@ def build_links(polys):
                 qb = lerp(a2, b2, (e - a2[axis]) / span2)
                 if abs(pa[1] - qa[1]) > BORDER_HEIGHT_TOLERANCE or abs(pb[1] - qb[1]) > BORDER_HEIGHT_TOLERANCE:
                     continue
+                # Portal ends in the order of poly i's edge (a to b), like the internal links: the router
+                # reads the first end as the left side. pa/pb are ordered by coordinate, so flip them when
+                # the edge runs toward smaller values. Poly i2's edge runs the other way.
+                if a[axis] > b[axis]:
+                    pa, pb = pb, pa
                 links[i][i2] = (pa, pb)
                 links[i2][i] = (pb, pa)
     return links

@@ -92,7 +92,7 @@ public sealed partial class KillerFrequencyAccessMod
         FindStandpointsBothPostures(origin, target);
         _walkStandpointIndex = 0;
         BeginWalkPosture();
-        if (!PlanWalk(origin.position, target, "start"))
+        if (!PlanWalk(GetFeet(origin), target, "start"))
         {
             StopAutoWalk($"no path to {name}");
             SpeakSelectionText($"No path to {name}");
@@ -252,7 +252,7 @@ public sealed partial class KillerFrequencyAccessMod
                         return;
                     }
 
-                    if (!PlanWalk(origin.position, target, $"replan (stuck {_walkStuckReplans})"))
+                    if (!PlanWalk(GetFeet(origin), target, $"replan (stuck {_walkStuckReplans})"))
                     {
                         StopAutoWalk("no path on replan");
                         SpeakSelectionText($"No path to {GetSpokenName(target)}");
@@ -324,7 +324,7 @@ public sealed partial class KillerFrequencyAccessMod
         if (_walkStandpointIndex < _walkStandpoints.Count)
         {
             _walkAiming = false;
-            if (PlanWalk(origin.position, target, $"next spot {_walkStandpointIndex + 1}"))
+            if (PlanWalk(GetFeet(origin), target, $"next spot {_walkStandpointIndex + 1}"))
             {
                 return;
             }
@@ -654,12 +654,10 @@ public sealed partial class KillerFrequencyAccessMod
     {
         corners.Clear();
         expanded = 0;
-        if (!NavMesh.Raycast(start, goal, out _, NavMesh.AllAreas))
-        {
-            corners.Add(goal);
-            return true;
-        }
-
+        // Floors connect only through stair polygons, and the graph routes polygon to polygon, so a route
+        // to another floor always goes by the stairs. NavMesh.Raycast cannot be used as a shortcut first:
+        // it traces in x/z across the start's own floor, so a goal on the floor above reads as "clear"
+        // and the walk would head for the point underneath it.
         var graph = GetLiveNavGraph();
         if (graph != null)
         {
@@ -733,6 +731,13 @@ public sealed partial class KillerFrequencyAccessMod
     {
         corners.Clear();
         expanded = 0;
+        // Straight line only on one floor (NavMesh.Raycast traces in x/z on the start's floor).
+        if (Math.Abs(start.y - goal.y) <= WalkCornerReachedHeightMeters && !NavMesh.Raycast(start, goal, out _, NavMesh.AllAreas))
+        {
+            corners.Add(goal);
+            return true;
+        }
+
 
         (int X, int Z, int Y) Key(Vector3 p) => (Mathf.RoundToInt(p.x / RouteCellMeters), Mathf.RoundToInt(p.z / RouteCellMeters), Mathf.RoundToInt(p.y / 1.0f));
 
