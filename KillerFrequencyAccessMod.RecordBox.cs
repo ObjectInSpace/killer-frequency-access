@@ -62,7 +62,7 @@ public sealed partial class KillerFrequencyAccessMod
             var title = SelectedRecordTitle(box);
             if (title.Length > 0 && !_sweepActive)
             {
-                SpeechRouter.Speak(title, interrupt);
+                Speak(title, interrupt);
             }
         }
         catch (System.Exception ex)
