@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace Killer_Frequency_Access;
 
@@ -10,10 +9,9 @@ namespace Killer_Frequency_Access;
 /// The sleeves carry no text component (rip: P_HeroProp_LPRecord_Sleeve_01..12 have only a mesh and
 /// LPRecordSleeve), so the record's name comes from its data: LPRecordSleeve.recordData.title.
 ///
-/// Spoken: the selected record when the box becomes the observed interactable (after the box's own
-/// announcement), and again each time the selection changes while it stays observed. A change is
-/// spoken once it has held for RecordSettleSeconds, since speech queues and a quick flick would
-/// otherwise queue every record passed over.
+/// Spoken: the selected record when the box becomes the observed interactable (queued after the box's
+/// own announcement), and again at once each time the selection changes while it stays observed,
+/// interrupting whatever is speaking (user, 2026-11-23: interrupt, never queue or delay).
 ///
 /// Unverified (rip has no method bodies, and LPRecordProperties fields are not serialised in it):
 /// that _currentSelection indexes _availableRecords, and what title holds. [records] logs the
@@ -22,12 +20,8 @@ namespace Killer_Frequency_Access;
 /// </summary>
 public sealed partial class KillerFrequencyAccessMod
 {
-    private const float RecordSettleSeconds = 0.25f;
-
     private int _recordBoxId = -1;
     private int _recordSelection = int.MinValue;
-    private int _recordSpokenSelection = int.MinValue;
-    private float _recordSelectionChangedTime;
 
     private void UpdateRecordBox()
     {
@@ -45,34 +39,30 @@ public sealed partial class KillerFrequencyAccessMod
                 return;
             }
 
-            var now = Time.unscaledTime;
             var selection = box._currentSelection;
+            bool interrupt;
             if (box.GetInstanceID() != _recordBoxId)
             {
-                // Focus just arrived: speak right away.
+                // Focus just arrived: follow the box's own announcement rather than cut it off.
                 _recordBoxId = box.GetInstanceID();
-                _recordSelection = selection;
-                _recordSpokenSelection = int.MinValue;
-                _recordSelectionChangedTime = now - RecordSettleSeconds;
+                interrupt = false;
                 LogRecordSelection(box, "focused");
             }
             else if (selection != _recordSelection)
             {
-                _recordSelection = selection;
-                _recordSelectionChangedTime = now;
+                interrupt = true;
                 LogRecordSelection(box, "changed");
             }
-
-            if (_recordSpokenSelection == _recordSelection || now - _recordSelectionChangedTime < RecordSettleSeconds || _sweepActive)
+            else
             {
                 return;
             }
 
-            _recordSpokenSelection = _recordSelection;
+            _recordSelection = selection;
             var title = SelectedRecordTitle(box);
-            if (title.Length > 0)
+            if (title.Length > 0 && !_sweepActive)
             {
-                SpeakSelectionText(title);
+                SpeechRouter.Speak(title, interrupt);
             }
         }
         catch (System.Exception ex)

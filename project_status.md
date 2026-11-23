@@ -112,7 +112,7 @@ number are in `docs\game-api.md` ("Player body", "Walkable area", "Doors, contai
 
 - Record box (`KillerFrequencyAccessMod.RecordBox.cs`): while the box (`Il2Cpp.RecordBox`) is the observed
   interactable, the selected record's `LPRecordSleeve.recordData.title` is spoken when focus arrives and
-  again when the selection changes (after it holds 0.25 s; speech queues). The sleeves have no text
+  again at once when the selection changes, interrupting other speech. The sleeves have no text
   component in the rip, so the title is the only source. Unverified: that `_currentSelection` indexes
   `_availableRecords`, and what `title` holds (LPRecordProperties fields are not serialised in the rip).
   `[records]` logs selection, list sizes, every record's name/title/tilt and `_activeRecord.properties`.
