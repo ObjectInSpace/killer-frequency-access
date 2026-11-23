@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 namespace Killer_Frequency_Access;
@@ -140,21 +139,6 @@ public sealed partial class KillerFrequencyAccessMod
         var text = $"{DescribeDistance(distance)} {DescribeDirectionRelativeTo(origin, point)}";
         var height = DescribeHeight(point);
         return height.Length == 0 ? text : $"{text}, {height}";
-    }
-
-    private static bool TryHasDirectNavPath(Vector3 from, Vector3 to)
-    {
-        if (!NavMesh.SamplePosition(from, out var startHit, 4f, NavMesh.AllAreas))
-        {
-            return false;
-        }
-
-        if (!NavMesh.SamplePosition(to, out var endHit, 4f, NavMesh.AllAreas))
-        {
-            return false;
-        }
-
-        return !NavMesh.Raycast(startHit.position, endHit.position, out _, NavMesh.AllAreas);
     }
 
     private static string ReadableObjectName(string rawName)

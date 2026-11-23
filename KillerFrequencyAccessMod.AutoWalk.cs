@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace Killer_Frequency_Access;
 
@@ -9,9 +8,9 @@ namespace Killer_Frequency_Access;
 /// Auto-walk to the selected target, built on game facts:
 /// - Route: the scene's baked NavMesh (SCN_Main NavMesh_0, Intro/Menu NavMesh_1, Epilogue NavMesh).
 ///   The game strips NavMeshPath and CalculateTriangulation, so the polygons come from the rip
-///   (NavGraph, tools\rip\gen_navmesh.py): A* over polygons, funnel through their shared edges. The
-///   graph is used only when it matches the live NavMesh; otherwise an A* over a 0.5 m lattice of
-///   NavMesh.SamplePosition points, which could not climb the ~40 degree stairs between floors.
+///   (NavGraph, tools\rip\gen_navmesh.py): A* over polygons, funnel through their shared edges one
+///   floor at a time. The graph is the only walking data: an earlier 0.5 m lattice over
+///   NavMesh.SamplePosition could not climb the ~40 degree stairs between floors and was removed.
 ///   Followed corner by corner with the player's CharacterController.
 /// - View: the game's CameraHandler.ResetToRotation (the CameraHandler under the player). The
 ///   game's look update owns the camera, so writing the camera transform directly is overwritten
@@ -35,7 +34,8 @@ public sealed partial class KillerFrequencyAccessMod
     private const float AimDegreesPerSecond = 240f;
     private const float AimSettleDegrees = 2f;
     private const float AimGiveUpSeconds = 4f;
-    private const float NavMeshSampleMeters = 2f;
+    /// <summary>How far a point may be from the walking graph and still be snapped onto it.</summary>
+    private const float NavSnapMeters = 2f;
 
     private readonly List<Vector3> _walkCorners = new();
     private int _walkCornerIndex;
@@ -139,31 +139,38 @@ public sealed partial class KillerFrequencyAccessMod
         var goal = _walkStandpointIndex < _walkStandpoints.Count
             ? _walkStandpoints[_walkStandpointIndex]
             : GetNearestPoint(target, from);
-        if (!NavMesh.SamplePosition(from, out var startHit, NavMeshSampleMeters, NavMesh.AllAreas))
+        var graph = GetLiveNavGraph();
+        if (graph == null)
         {
-            MelonLoader.MelonLogger.Msg($"[walk] {reason}: no NavMesh within {NavMeshSampleMeters} m of the player at {from}");
+            MelonLoader.MelonLogger.Msg($"[walk] {reason}: no walking graph for this scene");
             return false;
         }
 
-        if (!NavMesh.SamplePosition(goal, out var endHit, NavMeshSampleMeters, NavMesh.AllAreas))
+        if (!graph.TryClosestPoint(from, NavSnapMeters, out var start))
         {
-            MelonLoader.MelonLogger.Msg($"[walk] {reason}: no NavMesh within {NavMeshSampleMeters} m of {GetSpokenName(target)} at {goal}");
+            MelonLoader.MelonLogger.Msg($"[walk] {reason}: the player at {from} is not within {NavSnapMeters} m of {graph.Name}");
             return false;
         }
 
-        if (!TryFindNavMeshRoute(startHit.position, endHit.position, _walkCorners, out var expanded))
+        if (!graph.TryClosestPoint(goal, NavSnapMeters, out var end))
         {
-            MelonLoader.MelonLogger.Msg($"[walk] {reason}: no NavMesh route to {GetSpokenName(target)} ({expanded} nodes searched)");
+            MelonLoader.MelonLogger.Msg($"[walk] {reason}: {GetSpokenName(target)} at {goal} is not within {NavSnapMeters} m of {graph.Name}");
+            return false;
+        }
+
+        if (!graph.TryRoute(start, end, _walkCorners, out var searched, out var failure))
+        {
+            MelonLoader.MelonLogger.Msg($"[walk] {reason}: no route to {GetSpokenName(target)} on {graph.Name}: {failure} ({searched} polygons searched)");
             return false;
         }
 
         // Skip corners already reached (the first is the start point).
-        while (_walkCornerIndex < _walkCorners.Count - 1 && IsCornerReached(startHit.position, _walkCorners[_walkCornerIndex]))
+        while (_walkCornerIndex < _walkCorners.Count - 1 && IsCornerReached(start, _walkCorners[_walkCornerIndex]))
         {
             _walkCornerIndex++;
         }
 
-        MelonLoader.MelonLogger.Msg($"[walk] {reason}: to {GetSpokenName(target)}, {_walkCorners.Count} corners, {expanded} nodes searched, {PlanarDistance(from, endHit.position):0.0} m");
+        MelonLoader.MelonLogger.Msg($"[walk] {reason}: to {GetSpokenName(target)}, {_walkCorners.Count} corners, {searched} polygons searched, {RouteLength(start, _walkCorners):0.0} m of route");
         return true;
     }
 
@@ -381,12 +388,7 @@ public sealed partial class KillerFrequencyAccessMod
             return player.GetFootLocation();
         }
 
-        if (NavMesh.SamplePosition(origin.position, out var footHit, NavMeshSampleMeters, NavMesh.AllAreas))
-        {
-            LogOnce("walk-no-player-feet", "[walk] FlatScreenPlayer.instance is null; feet taken from the NavMesh under the player");
-            return footHit.position;
-        }
-
+        LogOnce("walk-no-player-feet", "[walk] FlatScreenPlayer.instance is null; using the player transform for the feet");
         return origin.position;
     }
 
@@ -425,6 +427,11 @@ public sealed partial class KillerFrequencyAccessMod
         var lowestFloor = aim.y - eyeHeight - reach;
         var highestFloor = aim.y - eyeHeight + reach;
         var graph = GetLiveNavGraph();
+        if (graph == null)
+        {
+            return;
+        }
+
         var floors = new List<float>();
         var tested = 0;
         var tooSteep = 0;
@@ -436,15 +443,7 @@ public sealed partial class KillerFrequencyAccessMod
                 var x = aim.x + Mathf.Cos(angle) * radius;
                 var z = aim.z + Mathf.Sin(angle) * radius;
                 floors.Clear();
-                if (graph != null)
-                {
-                    graph.FloorHeightsAt(x, z, floors);
-                }
-                else if (NavMesh.SamplePosition(new Vector3(x, aim.y - eyeHeight, z), out var sampled, reach, NavMesh.AllAreas))
-                {
-                    floors.Add(sampled.position.y);
-                }
-
+                graph.FloorHeightsAt(x, z, floors);
                 foreach (var floorY in floors)
                 {
                     if (floorY < lowestFloor || floorY > highestFloor)
@@ -642,52 +641,35 @@ public sealed partial class KillerFrequencyAccessMod
         }
     }
 
-    private const float RouteCellMeters = 0.5f;
-    private const int RouteMaxExpansions = 30000;
-
-    /// <summary>
-    /// A* over the NavMesh: nodes are NavMesh.SamplePosition points on a lattice, a step is allowed when
-    /// NavMesh.Raycast finds no edge between its ends. The result is shortened by skipping corners the
-    /// raycast can see past. Corners go into <paramref name="corners"/>, start excluded, goal included.
-    /// </summary>
-    private static bool TryFindNavMeshRoute(Vector3 start, Vector3 goal, List<Vector3> corners, out int expanded)
-    {
-        corners.Clear();
-        expanded = 0;
-        // Floors connect only through stair polygons, and the graph routes polygon to polygon, so a route
-        // to another floor always goes by the stairs. NavMesh.Raycast cannot be used as a shortcut first:
-        // it traces in x/z across the start's own floor, so a goal on the floor above reads as "clear"
-        // and the walk would head for the point underneath it.
-        var graph = GetLiveNavGraph();
-        if (graph != null)
-        {
-            var routed = graph.TryRoute(start, goal, corners, out expanded, out var failure);
-            if (!routed)
-            {
-                MelonLoader.MelonLogger.Msg($"[walk] {graph.Name}: {failure} ({expanded} polygons searched)");
-            }
-
-            return routed;
-        }
-
-        return TryFindLatticeRoute(start, goal, corners, out expanded);
-    }
-
     private static List<NavGraph>? _navGraphs;
     private static NavGraph? _liveNavGraph;
     private static string? _liveNavGraphKey;
-    private const int NavGraphSamples = 16;
 
     /// <summary>
-    /// The rip graph that matches the live NavMesh, re-checked when the loaded scenes change. Null (and
-    /// the lattice search is used) when no graph has all but one of its samples on the live NavMesh.
+    /// Each scene's NavMesh asset, from the scenes' NavMeshSettings.m_NavMeshData in the rip (the game
+    /// will not be updated, so this is final).
     /// </summary>
+    private static readonly Dictionary<string, string> NavGraphByScene = new()
+    {
+        ["SCN_Main"] = "NavMesh_0",
+        ["SCN_Intro"] = "NavMesh_1",
+        ["SCN_Menu"] = "NavMesh_1",
+        ["SCN_Epilogue"] = "NavMesh",
+    };
+
+    /// <summary>The walking graph of the loaded scene that has one; looked up again when the loaded scenes change.</summary>
     private static NavGraph? GetLiveNavGraph()
     {
         var key = string.Empty;
+        string? graphName = null;
         for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
         {
-            key += UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).name + "|";
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).name;
+            key += scene + "|";
+            if (graphName == null && NavGraphByScene.TryGetValue(scene, out var name))
+            {
+                graphName = name;
+            }
         }
 
         if (key == _liveNavGraphKey)
@@ -696,7 +678,6 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         _liveNavGraphKey = key;
-        _liveNavGraph = null;
         try
         {
             _navGraphs ??= NavGraph.LoadAll();
@@ -707,139 +688,17 @@ public sealed partial class KillerFrequencyAccessMod
             _navGraphs = new List<NavGraph>();
         }
 
-        var report = new List<string>();
-        var bestMatches = -1;
-        foreach (var graph in _navGraphs)
-        {
-            var matches = graph.CountLiveMatches(NavGraphSamples);
-            report.Add($"{graph.Name} {matches}/{NavGraphSamples}");
-            if (matches >= NavGraphSamples - 1 && matches > bestMatches)
-            {
-                _liveNavGraph = graph;
-                bestMatches = matches;
-            }
-        }
-
+        _liveNavGraph = graphName == null ? null : _navGraphs.Find(g => g.Name == graphName);
         MelonLoader.MelonLogger.Msg(_liveNavGraph != null
-            ? $"[nav] scenes {key.TrimEnd('|')}: routing over {_liveNavGraph.Name} ({_liveNavGraph.PolygonCount} polygons; samples on the live NavMesh: {string.Join(", ", report)})"
-            : $"[nav] scenes {key.TrimEnd('|')}: no walking graph matches the live NavMesh ({string.Join(", ", report)}); using the lattice search");
+            ? $"[nav] scenes {key.TrimEnd('|')}: walking graph {_liveNavGraph.Name} ({_liveNavGraph.PolygonCount} polygons)"
+            : $"[nav] scenes {key.TrimEnd('|')}: no walking graph");
         return _liveNavGraph;
-    }
-
-    /// <summary>Fallback when no rip graph matches the live NavMesh.</summary>
-    private static bool TryFindLatticeRoute(Vector3 start, Vector3 goal, List<Vector3> corners, out int expanded)
-    {
-        corners.Clear();
-        expanded = 0;
-        // Straight line only on one floor (NavMesh.Raycast traces in x/z on the start's floor).
-        if (Math.Abs(start.y - goal.y) <= WalkCornerReachedHeightMeters && !NavMesh.Raycast(start, goal, out _, NavMesh.AllAreas))
-        {
-            corners.Add(goal);
-            return true;
-        }
-
-
-        (int X, int Z, int Y) Key(Vector3 p) => (Mathf.RoundToInt(p.x / RouteCellMeters), Mathf.RoundToInt(p.z / RouteCellMeters), Mathf.RoundToInt(p.y / 1.0f));
-
-        var startKey = Key(start);
-        var position = new Dictionary<(int, int, int), Vector3> { [startKey] = start };
-        var cost = new Dictionary<(int, int, int), float> { [startKey] = 0f };
-        var parent = new Dictionary<(int, int, int), (int, int, int)>();
-        var closed = new HashSet<(int, int, int)>();
-        var open = new SortedSet<(float F, int Order, (int, int, int) Key)>();
-        var order = 0;
-        open.Add((Vector3.Distance(start, goal), order++, startKey));
-        (int, int, int)? reached = null;
-
-        while (open.Count > 0 && expanded < RouteMaxExpansions)
-        {
-            var current = open.Min;
-            open.Remove(current);
-            var key = current.Key;
-            if (!closed.Add(key))
-            {
-                continue;
-            }
-
-            expanded++;
-            var here = position[key];
-            if (Vector3.Distance(here, goal) <= RouteCellMeters * 1.5f && !NavMesh.Raycast(here, goal, out _, NavMesh.AllAreas))
-            {
-                reached = key;
-                break;
-            }
-
-            for (var dx = -1; dx <= 1; dx++)
-            {
-                for (var dz = -1; dz <= 1; dz++)
-                {
-                    if (dx == 0 && dz == 0)
-                    {
-                        continue;
-                    }
-
-                    var probe = new Vector3(here.x + dx * RouteCellMeters, here.y, here.z + dz * RouteCellMeters);
-                    if (!NavMesh.SamplePosition(probe, out var hit, RouteCellMeters, NavMesh.AllAreas))
-                    {
-                        continue;
-                    }
-
-                    var next = hit.position;
-                    var nextKey = Key(next);
-                    if (closed.Contains(nextKey) || NavMesh.Raycast(here, next, out _, NavMesh.AllAreas))
-                    {
-                        continue;
-                    }
-
-                    var g = cost[key] + Vector3.Distance(here, next);
-                    if (cost.TryGetValue(nextKey, out var known) && known <= g)
-                    {
-                        continue;
-                    }
-
-                    cost[nextKey] = g;
-                    position[nextKey] = next;
-                    parent[nextKey] = key;
-                    open.Add((g + Vector3.Distance(next, goal), order++, nextKey));
-                }
-            }
-        }
-
-        if (reached == null)
-        {
-            return false;
-        }
-
-        var raw = new List<Vector3> { goal };
-        for (var k = reached.Value; !k.Equals(startKey); k = parent[k])
-        {
-            raw.Add(position[k]);
-        }
-
-        raw.Add(start);
-        raw.Reverse();
-
-        // Shorten: from each corner, jump to the farthest later corner the NavMesh raycast can reach.
-        var i = 0;
-        while (i < raw.Count - 1)
-        {
-            var j = raw.Count - 1;
-            while (j > i + 1 && NavMesh.Raycast(raw[i], raw[j], out _, NavMesh.AllAreas))
-            {
-                j--;
-            }
-
-            corners.Add(raw[j]);
-            i = j;
-        }
-
-        return true;
     }
 
     /// <summary>
     /// Where a stalled walk is relative to its route (Date Everything Access logs the same for stall
     /// triage): feet, the leg being walked, how far off that leg the feet are, the nearest closed room
-    /// door, and whether the feet are still on the NavMesh.
+    /// door, and whether the feet are still on the walking graph.
     /// </summary>
     private void LogWalkStall(Transform origin)
     {
@@ -850,9 +709,10 @@ public sealed partial class KillerFrequencyAccessMod
         var toFeet = new Vector2(feet.x - legStart.x, feet.z - legStart.z);
         var t = leg.sqrMagnitude < 1e-6f ? 0f : Mathf.Clamp01(Vector2.Dot(toFeet, leg) / leg.sqrMagnitude);
         var offRoute = (toFeet - leg * t).magnitude;
-        var onMesh = NavMesh.SamplePosition(feet, out var meshHit, 0.3f, NavMesh.AllAreas)
-            ? $"on NavMesh ({Vector3.Distance(meshHit.position, feet):0.00} m)"
-            : "off NavMesh";
+        var graph = GetLiveNavGraph();
+        var onMesh = graph != null && graph.TryClosestPoint(feet, 0.3f, out var meshPoint)
+            ? $"on the walking graph ({Vector3.Distance(meshPoint, feet):0.00} m)"
+            : "off the walking graph";
         var doorText = "no closed room door within 2 m";
         foreach (var portal in _walkDoors)
         {
@@ -872,6 +732,19 @@ public sealed partial class KillerFrequencyAccessMod
     {
         return PlanarDistance(feet, corner) <= WalkCornerReachedMeters
             && Math.Abs(feet.y - corner.y) <= WalkCornerReachedHeightMeters;
+    }
+
+    private static float RouteLength(Vector3 start, List<Vector3> corners)
+    {
+        var total = 0f;
+        var from = start;
+        foreach (var corner in corners)
+        {
+            total += Vector3.Distance(from, corner);
+            from = corner;
+        }
+
+        return total;
     }
 
     private static float PlanarDistance(Vector3 a, Vector3 b)

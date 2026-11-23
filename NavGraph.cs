@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace Killer_Frequency_Access;
 
@@ -17,9 +16,8 @@ namespace Killer_Frequency_Access;
 /// ~40 degree runs of 0.3 m sloped strips, so each lattice step rises ~0.42 m, at the edge of the 0.5 m
 /// sample radius (2026-11-22 run: "no NavMesh route" after the whole floor was searched, 3,800 nodes).
 /// The rip's NavMesh_0 connects basement, ground, the 1.0 m level and the first floor in one region.
-///
-/// Which graph is live is not taken from scene names: each graph is checked against the live NavMesh
-/// with NavMesh.SamplePosition on its own polygon centres, and the one that matches is used.
+/// Auto-walk uses only this graph: routes, snapping points onto the walkable area, the floors under a
+/// standing spot. The graph for a scene is picked by scene name (the game will not be updated).
 /// </summary>
 internal sealed class NavGraph
 {
@@ -113,33 +111,70 @@ internal sealed class NavGraph
     private static Vector3 ReadVector(BinaryReader reader) => new(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
     /// <summary>
-    /// Checks the graph against the live NavMesh: polygon centres spread over the graph must each have
-    /// a NavMesh point within 5 cm. Returns how many of the samples matched.
+    /// The closest point of the walking graph to <paramref name="point"/>, within <paramref name="maxDistance"/>:
+    /// straight above or below it when a polygon covers its x/z, otherwise the nearest polygon edge.
     /// </summary>
-    public int CountLiveMatches(int samples)
+    public bool TryClosestPoint(Vector3 point, float maxDistance, out Vector3 closest)
     {
-        var matched = 0;
-        for (var s = 0; s < samples; s++)
+        closest = point;
+        var best = maxDistance;
+        var found = false;
+        for (var gx = Cell(point.x - maxDistance); gx <= Cell(point.x + maxDistance); gx++)
         {
-            var centre = Centre(_polys[(int)((long)s * _polys.Length / samples)]);
-            if (NavMesh.SamplePosition(centre, out var hit, 0.2f, NavMesh.AllAreas) && Vector3.Distance(hit.position, centre) < 0.05f)
+            for (var gz = Cell(point.z - maxDistance); gz <= Cell(point.z + maxDistance); gz++)
             {
-                matched++;
+                if (!_grid.TryGetValue((gx, gz), out var candidates))
+                {
+                    continue;
+                }
+
+                foreach (var i in candidates)
+                {
+                    var poly = _polys[i];
+                    Vector3 onPoly;
+                    if (TryHeightInside(poly, point.x, point.z, out var y))
+                    {
+                        onPoly = new Vector3(point.x, y, point.z);
+                    }
+                    else
+                    {
+                        onPoly = ClosestOnEdges(poly, point);
+                    }
+
+                    var distance = Vector3.Distance(onPoly, point);
+                    if (distance <= best)
+                    {
+                        best = distance;
+                        closest = onPoly;
+                        found = true;
+                    }
+                }
             }
         }
 
-        return matched;
+        return found;
     }
 
-    private static Vector3 Centre(Vector3[] poly)
+    private static Vector3 ClosestOnEdges(Vector3[] poly, Vector3 p)
     {
-        var sum = Vector3.zero;
-        foreach (var v in poly)
+        var best = float.MaxValue;
+        var result = poly[0];
+        for (var k = 0; k < poly.Length; k++)
         {
-            sum += v;
+            var a = poly[k];
+            var b = poly[(k + 1) % poly.Length];
+            var ab = b - a;
+            var t = ab.sqrMagnitude < 1e-9f ? 0f : Mathf.Clamp01(Vector3.Dot(p - a, ab) / ab.sqrMagnitude);
+            var q = a + ab * t;
+            var d = (q - p).sqrMagnitude;
+            if (d < best)
+            {
+                best = d;
+                result = q;
+            }
         }
 
-        return sum / poly.Length;
+        return result;
     }
 
     /// <summary>The height of every polygon (every floor) whose x/z covers the point.</summary>
