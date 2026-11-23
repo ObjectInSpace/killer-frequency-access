@@ -92,6 +92,7 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             UpdateDiegeticText(now);
+            UpdateTutorialText(now);
         }
         catch (System.Exception ex)
         {
@@ -143,6 +144,85 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         LogInspectedPageList();
+    }
+
+    // Tutorial panels standing in the world (Il2Cpp.TutorialAnchor; SCN_Main has 12: crouch, object tray,
+    // how to respond, text panels, timed responses, and the soft-collision "Crouch" blockers). The anchor
+    // fades its _tutorialCanvasGroup in when its BoundingBox / logic allows and by distance. The panel
+    // under _tutorial holds a TMP title ("Tutorial_Title") and a Team17 TextRenderer body
+    // ("Tutorial_Text", a TextMeshProUGUI whose IconTextProvider writes key glyphs as sprite tags).
+    // Spoken once when it becomes visible; read again only after it has been hidden for a second, so
+    // the fade edge does not repeat it.
+    private const float TutorialHiddenResetSeconds = 1.0f;
+    private readonly List<Il2Cpp.TutorialAnchor> _tutorialAnchors = new();
+    private readonly Dictionary<int, (string Text, float LastVisible)> _tutorialSpoken = new();
+
+    private void UpdateTutorialText(float now)
+    {
+        if (_tutorialAnchors.Count == 0 || now >= _nextTutorialRefreshTime)
+        {
+            _nextTutorialRefreshTime = now + DiegeticRefreshSeconds;
+            _tutorialAnchors.Clear();
+            foreach (var anchor in UnityEngine.Object.FindObjectsOfType<Il2Cpp.TutorialAnchor>())
+            {
+                _tutorialAnchors.Add(anchor);
+            }
+        }
+
+        foreach (var anchor in _tutorialAnchors)
+        {
+            if (anchor == null)
+            {
+                continue;
+            }
+
+            var id = anchor.GetInstanceID();
+            var text = TutorialText(anchor);
+            _tutorialSpoken.TryGetValue(id, out var spoken);
+            if (text.Length == 0)
+            {
+                if (spoken.Text != null && now - spoken.LastVisible > TutorialHiddenResetSeconds)
+                {
+                    _tutorialSpoken.Remove(id);
+                }
+
+                continue;
+            }
+
+            if (text != spoken.Text)
+            {
+                SpeakSelectionText(text);
+                LoggerInstance.Msg($"[worldtext] tutorial {BuildHierarchyPath(anchor.transform)}: {text}");
+            }
+
+            _tutorialSpoken[id] = (text, now);
+        }
+    }
+
+    private float _nextTutorialRefreshTime;
+
+    /// <summary>The panel's visible texts in hierarchy order (title, then body), or empty when hidden.</summary>
+    private static string TutorialText(Il2Cpp.TutorialAnchor anchor)
+    {
+        var panel = anchor._tutorial;
+        var group = anchor._tutorialCanvasGroup;
+        if (!anchor.isActiveAndEnabled || panel == null || !panel.gameObject.activeInHierarchy
+            || (group != null && (!group.gameObject.activeInHierarchy || group.alpha <= 0.001f)))
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        foreach (var text in panel.GetComponentsInChildren<TMP_Text>())
+        {
+            var value = VisibleText(text);
+            if (value.Length > 0)
+            {
+                parts.Add(value);
+            }
+        }
+
+        return string.Join(". ", parts);
     }
 
     private Il2Cpp.FsInspectDiegeticTextDetector? _inspectDetector;

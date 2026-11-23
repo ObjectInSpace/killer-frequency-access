@@ -43,6 +43,8 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
         UpdateAutoWalk(Time.unscaledDeltaTime);
         UpdateSweep();
         UpdateObservedInteractableAnnouncement();
+        // After the observed object's announcement, so the record box is named before its record.
+        UpdateRecordBox();
         UpdatePlayerRoomAnnouncement();
         UpdateHeldItemAnnouncement();
         LogPerformingInteractions();

@@ -106,6 +106,21 @@ number are in `docs\game-api.md` ("Player body", "Walkable area", "Doors, contai
 - Logs: `[walk]` (spots, route, posture, doors, containers, stalls, detours, stop reason), `[nav]`,
   `[place]`, `[sweep]`.
 
+## Text on objects (2026-11-23)
+
+- Record box (`KillerFrequencyAccessMod.RecordBox.cs`): while the box (`Il2Cpp.RecordBox`) is the observed
+  interactable, the selected record's `LPRecordSleeve.recordData.title` is spoken when focus arrives and
+  again when the selection changes (after it holds 0.25 s; speech queues). The sleeves have no text
+  component in the rip, so the title is the only source. Unverified: that `_currentSelection` indexes
+  `_availableRecords`, and what `title` holds (LPRecordProperties fields are not serialised in the rip).
+  `[records]` logs selection, list sizes, every record's name/title/tilt and `_activeRecord.properties`.
+- Labels and pages (`DiegeticTextLocalizer`, 374 in SCN_Main: map locations and streets, item notes,
+  fuses, signs, floppy disks, the disc's side labels) appear in a `DiegeticTextDisplay` when the game's
+  detector picks one; those displays were already read when `FullyShown`.
+- Tutorial panels (`Il2Cpp.TutorialAnchor`, 12 in SCN_Main): spoken when the anchor's canvas group fades
+  in (title, then body with key glyphs), again only after hidden for 1 s. `[worldtext] tutorial` logs them.
+- The rip has no world-space 3D TextMeshPro; the other world-space canvases are the game's UI.
+
 ## Findings (2026-11-04)
 
 - The game is a radio station the player walks around in first person, with desk scopes (mixer,
