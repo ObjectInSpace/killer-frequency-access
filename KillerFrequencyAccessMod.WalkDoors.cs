@@ -28,11 +28,13 @@ public sealed partial class KillerFrequencyAccessMod
     private Il2Cpp.DoorOpenable? _walkOpeningDoor;
     private float _walkDoorOpenStartTime;
     private float _walkDoorOpenStartAmount;
+    private int _walkDoorsOpened;
 
     private void CollectWalkDoors()
     {
         _walkDoors.Clear();
         _walkOpeningDoor = null;
+        _walkDoorsOpened = 0;
         foreach (var portal in UnityEngine.Object.FindObjectsOfType<Il2Cpp.RoomPortalDoor>())
         {
             if (portal != null && portal._door != null)
@@ -70,7 +72,7 @@ public sealed partial class KillerFrequencyAccessMod
             MelonLoader.MelonLogger.Msg($"[walk] {name} on the route is locked; stopping {alongRoute:0.0} m before it");
             var target = _autoWalkTarget;
             StopAutoWalk("door on route locked");
-            SpeakSelectionText($"{name} is locked{(target != null ? $". It is on the way to {GetSpokenName(target)}" : string.Empty)}");
+            SpeakWalk($"{name} is locked{(target != null ? $". It is on the way to {GetSpokenName(target)}" : string.Empty)}");
             return true;
         }
 
@@ -79,7 +81,8 @@ public sealed partial class KillerFrequencyAccessMod
         _walkDoorOpenStartAmount = door.HowOpen();
         MelonLoader.MelonLogger.Msg($"[walk] opening {name} ({alongRoute:0.0} m ahead on the route, open {_walkDoorOpenStartAmount:0.00})");
         door.Open();
-        SpeakSelectionText($"Opening {name}");
+        _walkDoorsOpened++;
+        SpeakWalk($"Opening {name}");
         return true;
     }
 
@@ -119,7 +122,7 @@ public sealed partial class KillerFrequencyAccessMod
 
         MelonLoader.MelonLogger.Msg($"[walk] {name} did not open: Open() left HowOpen at {amount:0.00} (was {_walkDoorOpenStartAmount:0.00})");
         StopAutoWalk("door did not open");
-        SpeakSelectionText($"{name} is closed and did not open. Open it, then walk again");
+        SpeakWalk($"{name} is closed and did not open. Open it, then walk again");
         return true;
     }
 

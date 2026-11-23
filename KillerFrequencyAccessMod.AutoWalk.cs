@@ -63,21 +63,47 @@ public sealed partial class KillerFrequencyAccessMod
         var target = GetListWalkTarget();
         if (target == null)
         {
-            SpeakSelectionText(_listLevel == ListLevel.Rooms
+            SpeakWalk(_listLevel == ListLevel.Rooms
                 ? "Choose an object first: End lists the objects in the room"
                 : "Nothing selected to walk to");
             return;
         }
 
+        if (_sweepActive)
+        {
+            StopSweep("the player started a walk");
+        }
+
+        StartAutoWalkTo(target);
+    }
+
+    /// <summary>Why the last walk ended (the reason given to StopAutoWalk), for the coverage sweep.</summary>
+    private string _lastWalkStopReason = string.Empty;
+
+    /// <summary>Walk speech; silent during a coverage sweep (hundreds of walks), which logs instead.</summary>
+    private void SpeakWalk(string text)
+    {
+        if (_sweepActive)
+        {
+            return;
+        }
+
+        SpeakSelectionText(text);
+    }
+
+    private void StartAutoWalkTo(Transform target)
+    {
         if (!TryGetNavigationOrigin(out var origin))
         {
-            SpeakSelectionText("Player position unavailable");
+            _lastWalkStopReason = "no player";
+            SpeakWalk("Player position unavailable");
             return;
         }
 
         var name = GetSpokenName(target);
         if (IsReadyToUse(target))
         {
+            _lastWalkStopReason = "arrived (already in range)";
             SpeakInRangeWithAction(target);
             return;
         }
@@ -96,11 +122,11 @@ public sealed partial class KillerFrequencyAccessMod
         if (!PlanWalk(GetFeet(origin), target, "start"))
         {
             StopAutoWalk($"no path to {name}");
-            SpeakSelectionText($"No path to {name}");
+            SpeakWalk($"No path to {name}");
             return;
         }
 
-        SpeakSelectionText($"Walking to {name}");
+        SpeakWalk($"Walking to {name}");
     }
 
     /// <summary>
@@ -265,14 +291,14 @@ public sealed partial class KillerFrequencyAccessMod
                     if (_walkStuckReplans > WalkMaxStuckReplans)
                     {
                         StopAutoWalk("stuck");
-                        SpeakSelectionText($"Stuck. {GetSpokenName(target)} is {DescribeWhere(origin, nearest)}");
+                        SpeakWalk($"Stuck. {GetSpokenName(target)} is {DescribeWhere(origin, nearest)}");
                         return;
                     }
 
                     if (!PlanWalk(GetFeet(origin), target, $"replan (stuck {_walkStuckReplans})"))
                     {
                         StopAutoWalk("no path on replan");
-                        SpeakSelectionText($"No path to {GetSpokenName(target)}");
+                        SpeakWalk($"No path to {GetSpokenName(target)}");
                     }
 
                     return;
@@ -348,7 +374,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         StopAutoWalk($"no spot worked (game observes {observed})");
-        SpeakSelectionText($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
+        SpeakWalk($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
     }
 
     /// <summary>The game's own move mode: FlatScreenPlayer.currentMoveMode is CROUCH.</summary>
@@ -625,7 +651,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         var name = GetSpokenName(target);
-        SpeakSelectionText(actions.Count == 0 ? $"{name} in range. Nothing to do with it right now" : $"{name} in range. {string.Join(". ", actions)}");
+        SpeakWalk(actions.Count == 0 ? $"{name} in range. Nothing to do with it right now" : $"{name} in range. {string.Join(". ", actions)}");
     }
 
     private void StopAutoWalk(string reason)
@@ -636,6 +662,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         MelonLoader.MelonLogger.Msg($"[walk] stop: {reason}");
+        _lastWalkStopReason = reason;
         _isAutoWalking = false;
         _autoWalkTarget = null;
         _walkAiming = false;
@@ -647,7 +674,7 @@ public sealed partial class KillerFrequencyAccessMod
         StopAutoWalk(speakCancelled ? "cancelled" : "interrupted");
         if (speakCancelled)
         {
-            SpeakSelectionText("Auto walk cancelled");
+            SpeakWalk("Auto walk cancelled");
         }
     }
 

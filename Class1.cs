@@ -42,6 +42,7 @@ public sealed partial class KillerFrequencyAccessMod : MelonMod
     {
         HandleObjectNavigationHotkeys();
         UpdateAutoWalk(Time.unscaledDeltaTime);
+        UpdateSweep();
         UpdateObservedInteractableAnnouncement();
         UpdatePlayerRoomAnnouncement();
         UpdateHeldItemAnnouncement();

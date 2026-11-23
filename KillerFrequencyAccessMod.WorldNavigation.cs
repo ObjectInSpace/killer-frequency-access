@@ -104,6 +104,12 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         var name = GetSpokenName(observed);
+        if (_sweepActive)
+        {
+            _lastObservedInteractableObjectId = observedId;
+            return;
+        }
+
         SpeakSelectionTextDedup($"observed|{observedId}", actions.Count == 0 ? name : $"{name}. {string.Join(". ", actions)}");
         _lastObservedInteractableSpeakTime = now;
         _lastObservedInteractableObjectId = observedId;

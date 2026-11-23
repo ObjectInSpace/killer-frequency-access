@@ -74,7 +74,7 @@ public sealed partial class KillerFrequencyAccessMod
         {
             MelonLoader.MelonLogger.Msg($"[walk] no way around {name} ({_walkDetours} detours this walk)");
             StopAutoWalk($"blocked by {name}");
-            SpeakSelectionText($"Blocked by {name}. No way around");
+            SpeakWalk($"Blocked by {name}. No way around");
             return true;
         }
 
@@ -83,7 +83,7 @@ public sealed partial class KillerFrequencyAccessMod
         _walkCornerIndex = 0;
         _walkStuckReplans = 0;
         MelonLoader.MelonLogger.Msg($"[walk] detour around {name}: {detour.Corners.Count} corners, {detour.Length:0.0} m, rejoining the route");
-        SpeakSelectionText($"Going around {name}");
+        SpeakWalk($"Going around {name}");
         return true;
     }
 
