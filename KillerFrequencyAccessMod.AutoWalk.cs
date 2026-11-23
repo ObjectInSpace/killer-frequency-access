@@ -87,6 +87,7 @@ public sealed partial class KillerFrequencyAccessMod
         _walkAiming = false;
         _walkStuckReplans = 0;
         CollectWalkDoors();
+        ResetWalkObstacles();
         // Posture decides reach (desk buttons are out of sight crouched, things under furniture only
         // crouched), so spots are searched in both postures and the walk takes the spot's posture.
         FindStandpointsBothPostures(origin, target);
@@ -252,6 +253,15 @@ public sealed partial class KillerFrequencyAccessMod
                 {
                     _walkStuckReplans++;
                     LogWalkStall(origin);
+                    if (TryHandleBlocker(origin))
+                    {
+                        // Detour in place (or the walk stopped: nothing gets around the blocker).
+                        _walkProgressPosition = origin.position;
+                        _walkProgressTime = now;
+                        _nextWalkReplanTime = now + WalkReplanSeconds;
+                        return;
+                    }
+
                     if (_walkStuckReplans > WalkMaxStuckReplans)
                     {
                         StopAutoWalk("stuck");
