@@ -91,8 +91,14 @@ public sealed partial class KillerFrequencyAccessMod
         SpeakSelectionText(text);
     }
 
-    private void StartAutoWalkTo(Transform target)
+    /// <param name="keepContainerPlan">True for the walk to a container that must be opened first (WalkContainers).</param>
+    private void StartAutoWalkTo(Transform target, bool keepContainerPlan = false)
     {
+        if (!keepContainerPlan)
+        {
+            ClearContainerPlan();
+        }
+
         if (!TryGetNavigationOrigin(out var origin))
         {
             _lastWalkStopReason = "no player";
@@ -103,6 +109,16 @@ public sealed partial class KillerFrequencyAccessMod
         var name = GetSpokenName(target);
         if (IsReadyToUse(target))
         {
+            if (_containerToOpen != null)
+            {
+                // Already at the container: the walk stays active so UpdateAutoWalk opens it.
+                _autoWalkTarget = target;
+                _isAutoWalking = true;
+                _walkAiming = false;
+                _walkCorners.Clear();
+                return;
+            }
+
             _lastWalkStopReason = "arrived (already in range)";
             SpeakInRangeWithAction(target);
             return;
@@ -116,9 +132,15 @@ public sealed partial class KillerFrequencyAccessMod
         ResetWalkObstacles();
         // Posture decides reach (desk buttons are out of sight crouched, things under furniture only
         // crouched), so spots are searched in both postures and the walk takes the spot's posture.
+        _sightBlockers.Clear();
         FindStandpointsBothPostures(origin, target);
         _walkStandpointIndex = 0;
         BeginWalkPosture();
+        if (_walkStandpoints.Count == 0 && !keepContainerPlan && TryRedirectHiddenTarget(target))
+        {
+            return;
+        }
+
         if (!PlanWalk(GetFeet(origin), target, "start"))
         {
             StopAutoWalk($"no path to {name}");
@@ -229,6 +251,14 @@ public sealed partial class KillerFrequencyAccessMod
                 return;
             }
 
+            var now = Time.unscaledTime;
+            if (_containerOpening || (_containerToOpen != null && IsReadyToUse(target)))
+            {
+                // At the container: open it, then walk on to the object inside.
+                UpdateContainerOpening(now);
+                return;
+            }
+
             if (IsReadyToUse(target))
             {
                 StopAutoWalk("arrived");
@@ -236,7 +266,6 @@ public sealed partial class KillerFrequencyAccessMod
                 return;
             }
 
-            var now = Time.unscaledTime;
             var camera = GetInteractorCamera();
             var cameraPosition = camera != null ? camera.transform.position : origin.position;
             var nearest = GetNearestPoint(target, cameraPosition);
@@ -512,10 +541,17 @@ public sealed partial class KillerFrequencyAccessMod
                     }
 
                     if (!Physics.Raycast(eye, toAim.normalized, out var rayHit, toAim.magnitude + 0.3f, mask)
-                        || rayHit.collider == null
-                        || !TryGetGameInteractable(rayHit.collider.transform, out var hitInteractable)
+                        || rayHit.collider == null)
+                    {
+                        continue;
+                    }
+
+                    if (!TryGetGameInteractable(rayHit.collider.transform, out var hitInteractable)
                         || hitInteractable.GetInstanceID() != interactable.GetInstanceID())
                     {
+                        // Something else is in the line of sight; remembered so a walk with no spot can say
+                        // what hides the target (a closed drawer, the slot holding it).
+                        NoteSightBlocker(rayHit.collider);
                         continue;
                     }
 
@@ -667,6 +703,7 @@ public sealed partial class KillerFrequencyAccessMod
         _autoWalkTarget = null;
         _walkAiming = false;
         _walkCorners.Clear();
+        ClearContainerPlan();
     }
 
     private void StopAutoWalk(bool speakCancelled)

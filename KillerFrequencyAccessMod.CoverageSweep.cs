@@ -212,6 +212,7 @@ public sealed partial class KillerFrequencyAccessMod
         if (reason.StartsWith("no path", StringComparison.Ordinal) || reason.StartsWith("no route", StringComparison.Ordinal)) return "no_path";
         if (reason.StartsWith("blocked by", StringComparison.Ordinal)) return "blocked";
         if (reason.StartsWith("door", StringComparison.Ordinal)) return "door";
+        if (reason.StartsWith("container", StringComparison.Ordinal)) return "container";
         if (reason.StartsWith("no spot worked", StringComparison.Ordinal)) return "aim_failed";
         if (reason == "stuck") return "stalled";
         if (reason == "sweep budget") return "budget";
