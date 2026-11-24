@@ -84,6 +84,23 @@ public sealed partial class KillerFrequencyAccessMod
         JoinFloorsAtDoorways();
     }
 
+    /// <summary>
+    /// Whether moving a route end from <paramref name="from"/> to <paramref name="to"/> crosses nothing solid:
+    /// a line at knee height through the game's colliders, doors excluded (the walk opens them).
+    /// </summary>
+    private bool IsFloorMoveClear(Vector3 from, Vector3 to)
+    {
+        var up = Vector3.up * DoorProbeHeights[0];
+        var mask = Physics.DefaultRaycastLayers & ~_doorLayerMask;
+        if (!Physics.Linecast(from + up, to + up, out var hit, mask, QueryTriggerInteraction.Ignore))
+        {
+            return true;
+        }
+
+        LogOnce($"snap-blocked|{hit.collider.name}", $"[walk] not moving the route end {Vector3.Distance(from, to):0.0} m: {BuildHierarchyPath(hit.collider.transform)} is in the way");
+        return false;
+    }
+
     private const float DoorwaySideMeters = 1.0f;
     private const float DoorwaySnapMeters = 1.5f;
 

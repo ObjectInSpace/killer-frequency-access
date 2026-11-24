@@ -169,7 +169,11 @@ internal sealed class NavGraph
     /// 0.15 m against the bake's 0.22 m, and SCN_Main has 23 small pockets near the main floor), either end
     /// is moved, within <paramref name="maxDistance"/>, into the other's region, whichever moves less.
     /// </summary>
-    public bool TrySnapConnected(Vector3 start, Vector3 goal, float maxDistance, out Vector3 snappedStart, out Vector3 snappedGoal, out string failure)
+    /// <remarks>
+    /// <paramref name="isClear"/> checks a move between regions: a 2 m move went through the Basement
+    /// Janitor's west wall into the stairwell (2026-11-23 run), and the walk pressed into the wall.
+    /// </remarks>
+    public bool TrySnapConnected(Vector3 start, Vector3 goal, float maxDistance, Func<Vector3, Vector3, bool> isClear, out Vector3 snappedStart, out Vector3 snappedGoal, out string failure)
     {
         snappedStart = start;
         snappedGoal = goal;
@@ -195,11 +199,11 @@ internal sealed class NavGraph
             return true;
         }
 
-        var moveStart = TryClosestPoint(start, maxDistance, goalRegion, out var s2) ? Vector3.Distance(s2, start) : float.MaxValue;
-        var moveGoal = TryClosestPoint(goal, maxDistance, startRegion, out var g2) ? Vector3.Distance(g2, goal) : float.MaxValue;
+        var moveStart = TryClosestPoint(start, maxDistance, goalRegion, out var s2) && isClear(start, s2) ? Vector3.Distance(s2, start) : float.MaxValue;
+        var moveGoal = TryClosestPoint(goal, maxDistance, startRegion, out var g2) && isClear(goal, g2) ? Vector3.Distance(g2, goal) : float.MaxValue;
         if (moveStart == float.MaxValue && moveGoal == float.MaxValue)
         {
-            failure = $"start and goal are on separate parts of the floor ({startSize} and {goalSize} polygons) with none shared within {maxDistance} m";
+            failure = $"start and goal are on separate parts of the floor ({startSize} and {goalSize} polygons) with none shared within {maxDistance} m without passing a wall";
             return false;
         }
 

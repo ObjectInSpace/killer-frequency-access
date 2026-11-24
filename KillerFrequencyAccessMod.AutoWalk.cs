@@ -201,7 +201,7 @@ public sealed partial class KillerFrequencyAccessMod
             return false;
         }
 
-        if (!graph.TrySnapConnected(from, goal, NavSnapMeters, out var start, out var end, out var snapFailure))
+        if (!graph.TrySnapConnected(from, goal, NavSnapMeters, IsFloorMoveClear, out var start, out var end, out var snapFailure))
         {
             _walkFloorNotConnected |= snapFailure.StartsWith("start and goal are on separate", StringComparison.Ordinal);
             MelonLoader.MelonLogger.Msg($"[walk] {reason}: {GetSpokenName(target)}: {snapFailure} ({graph.Name})");
