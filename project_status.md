@@ -247,9 +247,16 @@ answer offline first; ask for a run only when the answer exists only at runtime.
 
 ## Open questions
 
-- Unverified at runtime (2026-11-23 build): whether `Openable.Open()` moves hinged `DoorOpenable`s;
-  whether `ConfigureForMoveMode` alone behaves like the crouch key; detours around obstacles; the sweep;
-  the walking graphs of SCN_Intro, SCN_Menu and SCN_Epilogue.
+- 2026-11-23 run (17:52 build): same-room walks arrived (66); cross-room walks failed. `Openable.Open()`
+  does not move a `DoorOpenable` (HowOpen stayed 0.01; 7 "door did not open"). Most of 10 "stuck" stalled
+  1.5-2 m from a closed door that is not a room portal (door wc), so no open was tried. Twice "no path"
+  from the Basement Janitor: the bake split it and the Cupboard off (68 polygons, agentClimb 0.05 m at the
+  door thresholds). Fixed, not yet run: doors found by route legs hitting door colliders and opened by
+  turning the rigidbody about its hinge as `FsArcSegmentMotionHandler` does (spring and gravity off,
+  its maxAngularVelocity, push away then pull), restored once the player is past; floor pieces joined
+  through every `RoomPortal` (`[nav] doorway` lines).
+- Unverified at runtime: whether `ConfigureForMoveMode` alone behaves like the crouch key; detours around
+  obstacles; the sweep; the walking graphs of SCN_Intro, SCN_Menu and SCN_Epilogue.
 - Deferred (user, 2026-11-23): pinboard items and post-its have no standing spots. The pinboard has its
   own first-person scope in the game and needs a separate investigation. Findings below.
 

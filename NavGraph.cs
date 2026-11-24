@@ -217,6 +217,81 @@ internal sealed class NavGraph
         return true;
     }
 
+    /// <summary>
+    /// Joins two parts of the floor through a doorway the bake left closed. The bake's agentClimb is 0.05 m,
+    /// so a door threshold splits the floor (SCN_Main: the Basement Janitor and Cupboard, 68 polygons, 1.3 m
+    /// from the main floor), while the player steps up to CharacterController.stepOffset, 0.3 m.
+    /// <paramref name="sideA"/> and <paramref name="sideB"/> are points either side of the doorway; each is
+    /// snapped onto the graph within <paramref name="maxDistance"/>. The snapped points must be on opposite
+    /// sides of <paramref name="doorway"/>, in different regions, and within <paramref name="maxStep"/> in
+    /// height. The link is a zero-width portal at the doorway's centre on the floor, so routes pass
+    /// through the middle of the doorway.
+    /// </summary>
+    public bool TryConnectAcross(Vector3 sideA, Vector3 sideB, Plane doorway, float maxDistance, float maxStep, out string result)
+    {
+        if (!TryClosestPoint(sideA, maxDistance, out var a) || !TryClosestPoint(sideB, maxDistance, out var b))
+        {
+            result = "no floor on one side";
+            return false;
+        }
+
+        var polyA = Locate(a);
+        var polyB = Locate(b);
+        if (polyA < 0 || polyB < 0)
+        {
+            result = "no polygon on one side";
+            return false;
+        }
+
+        if (_region[polyA] == _region[polyB])
+        {
+            result = "already connected";
+            return false;
+        }
+
+        if (doorway.GetSide(a) == doorway.GetSide(b))
+        {
+            result = "both sides snapped to the same side";
+            return false;
+        }
+
+        if (Math.Abs(a.y - b.y) > maxStep)
+        {
+            result = $"height step {Math.Abs(a.y - b.y):0.00} m";
+            return false;
+        }
+
+        var middle = (a + b) * 0.5f;
+        var onPlane = middle - doorway.normal * doorway.GetDistanceToPoint(middle);
+        _links[polyA] = Append(_links[polyA], (polyB, onPlane, onPlane));
+        _links[polyB] = Append(_links[polyB], (polyA, onPlane, onPlane));
+
+        var keep = _region[polyA];
+        var merge = _region[polyB];
+        var moved = 0;
+        for (var i = 0; i < _region.Length; i++)
+        {
+            if (_region[i] == merge)
+            {
+                _region[i] = keep;
+                moved++;
+            }
+        }
+
+        _regionSize[keep] += moved;
+        _regionSize[merge] = 0;
+        result = $"joined {moved} polygons to {_regionSize[keep] - moved} at {onPlane}, gap {Vector3.Distance(a, b):0.00} m";
+        return true;
+    }
+
+    private static (int, Vector3, Vector3)[] Append((int, Vector3, Vector3)[] links, (int, Vector3, Vector3) link)
+    {
+        var result = new (int, Vector3, Vector3)[links.Length + 1];
+        Array.Copy(links, result, links.Length);
+        result[^1] = link;
+        return result;
+    }
+
     private bool TryClosestPoint(Vector3 point, float maxDistance, int region, out Vector3 closest)
     {
         closest = point;

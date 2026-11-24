@@ -227,6 +227,7 @@ public sealed partial class KillerFrequencyAccessMod
 
     private void UpdateAutoWalk(float deltaTime)
     {
+        UpdateHeldDoors();
         if (!_isAutoWalking)
         {
             return;
@@ -789,13 +790,13 @@ public sealed partial class KillerFrequencyAccessMod
         var onMesh = graph != null && graph.TryClosestPoint(feet, 0.3f, out var meshPoint)
             ? $"on the walking graph ({Vector3.Distance(meshPoint, feet):0.00} m)"
             : "off the walking graph";
-        var doorText = "no closed room door within 2 m";
-        foreach (var portal in _walkDoors)
+        var doorText = "no closed door within 2 m";
+        foreach (var door in _walkDoors)
         {
-            if (portal != null && portal._door != null && !portal._door.IsFullyOpen()
-                && Vector3.Distance(portal.transform.position, feet) < 2f)
+            if (door != null && door.rigidBody != null && !door.IsFullyOpen()
+                && Vector3.Distance(door.rigidBody.worldCenterOfMass, feet) < 2f)
             {
-                doorText = $"closed room door {GetSpokenName(portal._door.transform)} {Vector3.Distance(portal.transform.position, feet):0.0} m away (open {portal._door.HowOpen():0.00}, locked {portal._door.IsLocked()})";
+                doorText = $"closed door {GetSpokenName(door.transform)} {Vector3.Distance(door.rigidBody.worldCenterOfMass, feet):0.0} m away (open {door.HowOpen():0.00}, locked {door.IsLocked()})";
                 break;
             }
         }
