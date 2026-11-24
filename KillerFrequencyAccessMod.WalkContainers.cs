@@ -10,7 +10,8 @@ namespace Killer_Frequency_Access;
 /// standing-spot search finds no spot, the colliders its sight lines hit instead say why, one rule for
 /// every case:
 /// - most hits on a closed container (Il2Cpp.Openable above the hit collider that is not IsFullyOpen:
-///   DrawerOpenable, DoorOpenable on cabinets): walk to the container, open it with Openable.Open() (the
+///   DrawerOpenable, DoorOpenable on cabinets): walk to the container, open it (hinged doors pushed on their
+///   hinge as in WalkDoors, drawers with Openable.Open(); the
 ///   user agreed 2026-11-23), wait until it is open, then walk to the object. Locked: say so.
 ///   DrawerOpenable overrides Open(); DoorOpenable does not, so whether the base Open() moves a cabinet
 ///   door is unverified and every open is checked with HowOpen(), as for room doors.
@@ -140,24 +141,62 @@ public sealed partial class KillerFrequencyAccessMod
 
         var container = _containerToOpen;
         var name = GetSpokenName(container.transform);
+        var hinged = container.TryCast<Il2Cpp.DoorOpenable>();
         if (!_containerOpening)
         {
             _containerOpening = true;
             _containerOpenStartTime = now;
             _containerOpenStartAmount = container.HowOpen();
+            if (hinged != null && TryGetNavigationOrigin(out var origin) && TryBeginDoorPush(hinged, origin.position, now, out var started))
+            {
+                // Cabinet doors are DoorOpenables: Open() does not move them (2026-11-23 run), so they are
+                // pushed on their hinge like room doors.
+                MelonLoader.MelonLogger.Msg($"[walk] opening {BuildHierarchyPath(container.transform)} on its hinge ({started})");
+                return true;
+            }
+
             MelonLoader.MelonLogger.Msg($"[walk] opening {BuildHierarchyPath(container.transform)} (open {_containerOpenStartAmount:0.00})");
             container.Open();
             return true;
         }
 
-        var amount = container.HowOpen();
+        var target = _containerFinalTarget;
+        float amount;
+        if (hinged != null && _walkOpeningDoor != null)
+        {
+            var state = StepDoorPush(now, out var report);
+            if (state == DoorPushState.Pushing)
+            {
+                return true;
+            }
+
+            _walkOpeningDoor = null;
+            ClearContainerPlan();
+            if (state == DoorPushState.Failed)
+            {
+                MelonLoader.MelonLogger.Msg($"[walk] {name} did not open: {report}");
+                StopAutoWalk("container did not open");
+                SpeakWalk($"{name} did not open. Open it, then walk again");
+                return true;
+            }
+
+            MelonLoader.MelonLogger.Msg($"[walk] {name} {report}; walking on to {(target != null ? GetSpokenName(target) : "the object")}");
+            StopAutoWalk("container opened");
+            if (target != null)
+            {
+                StartAutoWalkTo(target);
+            }
+
+            return true;
+        }
+
+        amount = container.HowOpen();
         var opened = container.IsFullyOpen();
         if (!opened && now - _containerOpenStartTime < ContainerOpenWaitSeconds)
         {
             return true;
         }
 
-        var target = _containerFinalTarget;
         ClearContainerPlan();
         if (!opened && amount <= _containerOpenStartAmount + 0.2f)
         {

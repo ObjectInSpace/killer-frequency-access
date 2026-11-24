@@ -163,7 +163,24 @@ public sealed partial class KillerFrequencyAccessMod
     {
         if (_walkOpeningDoor != null)
         {
-            return PushDoorOpen(origin, now);
+            switch (StepDoorPush(now, out var report))
+            {
+                case DoorPushState.Pushing:
+                    return true;
+                case DoorPushState.Failed:
+                    var failed = GetSpokenName(_walkOpeningDoor.transform);
+                    MelonLoader.MelonLogger.Msg($"[walk] {failed} did not open: {report}");
+                    _walkOpeningDoor = null;
+                    StopAutoWalk("door did not open");
+                    SpeakWalk($"{failed} is closed and did not open. Open it, then walk again");
+                    return true;
+                default:
+                    MelonLoader.MelonLogger.Msg($"[walk] {GetSpokenName(_walkOpeningDoor.transform)} {report}");
+                    _walkOpeningDoor = null;
+                    _nextWalkReplanTime = now + WalkReplanSeconds;
+                    _walkProgressTime = now;
+                    return false;
+            }
         }
 
         if (!TryFindNextDoorOnRoute(GetFeet(origin), out var door, out var alongRoute) || alongRoute > DoorOpenAtRouteMeters)
@@ -171,7 +188,7 @@ public sealed partial class KillerFrequencyAccessMod
             return false;
         }
 
-        if (door.IsFullyOpen())
+        if (IsDoorOpenByGame(door))
         {
             return false;
         }
@@ -186,56 +203,103 @@ public sealed partial class KillerFrequencyAccessMod
             return true;
         }
 
-        var handler = door.fsBoundedMotionInteraction?.motionHandler?.TryCast<Il2Cpp.FsArcSegmentMotionHandler>();
-        if (handler == null || handler.maxAngularVelocity <= 0f)
+        if (!TryBeginDoorPush(door, origin.position, now, out var why))
         {
-            MelonLoader.MelonLogger.Msg($"[walk] {name} has no FsArcSegmentMotionHandler speed to open it with");
-            StopAutoWalk("door has no motion handler");
+            MelonLoader.MelonLogger.Msg($"[walk] {name}: {why}");
+            StopAutoWalk("door cannot be pushed");
             SpeakWalk($"{name} is closed. Open it, then walk again");
             return true;
         }
 
-        HoldDoorOpen(door);
-        _walkOpeningDoor = door;
-        _walkDoorOpenStartTime = now;
-        _walkDoorOpenStartAmount = door.HowOpen();
-        _walkDoorSpeed = handler.maxAngularVelocity;
-        _walkDoorSign = PushAwaySign(door, origin.position);
-        _walkDoorReversed = false;
-        MelonLoader.MelonLogger.Msg($"[walk] opening {name} ({alongRoute:0.0} m ahead on the route, open {_walkDoorOpenStartAmount:0.00}, {_walkDoorSpeed:0.0} rad/s)");
+        MelonLoader.MelonLogger.Msg($"[walk] opening {name} ({alongRoute:0.0} m ahead on the route, {why})");
         _walkDoorsOpened++;
         SpeakWalk($"Opening {name}");
         return true;
     }
 
-    /// <summary>Turns the door about its hinge each frame until it is open, then lets the walk go on.</summary>
-    private bool PushDoorOpen(Transform origin, float now)
+    private enum DoorPushState
+    {
+        Pushing,
+        Open,
+        PartlyOpen,
+        Failed,
+    }
+
+    /// <summary>
+    /// The mod's own pace for swinging a door (radians per second), within the game's cap
+    /// (FsArcSegmentMotionHandler.maxAngularVelocity, 30 in SCN_Main). At the cap a cabinet door slammed
+    /// and the coroner's report inside was lost from the walk ("target gone", 2026-11-23 run).
+    /// </summary>
+    private const float DoorPushRadiansPerSecond = 2f;
+    private const float DoorOpenDegrees = 80f;
+    private const float DoorPartlyOpenDegrees = 30f;
+    private const float DoorMovedDegrees = 5f;
+
+    private Quaternion _walkDoorStartRotation;
+
+    /// <summary>
+    /// The game's own "open": IsFullyOpen() while HowOpen() is a real number. Some cabinet doors read
+    /// HowOpen as infinity or 0.00 (2026-11-23 run), so it is not trusted then.
+    /// </summary>
+    private static bool IsDoorOpenByGame(Il2Cpp.DoorOpenable door)
+    {
+        var amount = door.HowOpen();
+        return !float.IsNaN(amount) && !float.IsInfinity(amount) && door.IsFullyOpen();
+    }
+
+    /// <summary>Starts pushing a hinged door open (away from <paramref name="player"/> first). The reason out says why not, or the speed.</summary>
+    private bool TryBeginDoorPush(Il2Cpp.DoorOpenable door, Vector3 player, float now, out string report)
+    {
+        var handler = door.fsBoundedMotionInteraction?.motionHandler?.TryCast<Il2Cpp.FsArcSegmentMotionHandler>();
+        if (door.rigidBody == null || door.hinge == null || handler == null || handler.maxAngularVelocity <= 0f)
+        {
+            report = "no hinge, rigidbody or FsArcSegmentMotionHandler to open it with";
+            return false;
+        }
+
+        HoldDoorOpen(door);
+        _walkOpeningDoor = door;
+        _walkDoorOpenStartTime = now;
+        _walkDoorStartRotation = door.rigidBody.transform.rotation;
+        _walkDoorSpeed = Mathf.Min(DoorPushRadiansPerSecond, handler.maxAngularVelocity);
+        _walkDoorSign = PushAwaySign(door, player);
+        _walkDoorReversed = false;
+        report = $"HowOpen {door.HowOpen():0.00}, {_walkDoorSpeed:0.0} rad/s";
+        return true;
+    }
+
+    /// <summary>
+    /// One frame of pushing _walkOpeningDoor. Progress is the door's own turn from where it started (its
+    /// transform), and the game's IsFullyOpen when HowOpen is a real number. A door that has not turned
+    /// DoorMovedDegrees after DoorReverseAfterSeconds is pulled instead.
+    /// </summary>
+    private DoorPushState StepDoorPush(float now, out string report)
     {
         var door = _walkOpeningDoor!;
+        report = string.Empty;
         if (door == null || door.rigidBody == null || door.hinge == null)
         {
-            _walkOpeningDoor = null;
-            return false;
+            report = "door gone";
+            return DoorPushState.Failed;
         }
 
-        var amount = door.HowOpen();
-        var name = GetSpokenName(door.transform);
+        var turned = Quaternion.Angle(_walkDoorStartRotation, door.rigidBody.transform.rotation);
         var elapsed = now - _walkDoorOpenStartTime;
-        if (door.IsFullyOpen())
+        if (IsDoorOpenByGame(door) || turned >= DoorOpenDegrees)
         {
-            MelonLoader.MelonLogger.Msg($"[walk] {name} open ({amount:0.00}) after {elapsed:0.0} s{(_walkDoorReversed ? ", pulled" : ", pushed")}");
-            FinishDoorPush(door, now);
-            return false;
+            door.rigidBody.angularVelocity = Vector3.zero;
+            report = $"open (turned {turned:0} degrees, HowOpen {door.HowOpen():0.00}) after {elapsed:0.0} s, {(_walkDoorReversed ? "pulled" : "pushed")}";
+            return DoorPushState.Open;
         }
 
-        if (!_walkDoorReversed && elapsed >= DoorReverseAfterSeconds && amount < _walkDoorOpenStartAmount + 0.05f)
+        if (!_walkDoorReversed && elapsed >= DoorReverseAfterSeconds && turned < DoorMovedDegrees)
         {
             // It did not swing away from the player: this door opens the other way.
-            MelonLoader.MelonLogger.Msg($"[walk] {name} did not move when pushed ({amount:0.00}); pulling instead");
+            MelonLoader.MelonLogger.Msg($"[walk] {GetSpokenName(door.transform)} did not move when pushed ({turned:0} degrees); pulling instead");
             _walkDoorSign = -_walkDoorSign;
             _walkDoorReversed = true;
             _walkDoorOpenStartTime = now;
-            _walkDoorOpenStartAmount = amount;
+            _walkDoorStartRotation = door.rigidBody.transform.rotation;
             elapsed = 0f;
         }
 
@@ -244,31 +308,18 @@ public sealed partial class KillerFrequencyAccessMod
             var axis = door.hinge.transform.TransformDirection(door.hinge.axis).normalized;
             door.rigidBody.WakeUp();
             door.rigidBody.angularVelocity = axis * (_walkDoorSign * _walkDoorSpeed);
-            return true;
+            return DoorPushState.Pushing;
         }
 
-        if (amount > _walkDoorOpenStartAmount + 0.2f)
+        door.rigidBody.angularVelocity = Vector3.zero;
+        if (turned >= DoorPartlyOpenDegrees)
         {
-            // Open enough to pass; it may be stopped against something.
-            MelonLoader.MelonLogger.Msg($"[walk] {name} partly open ({_walkDoorOpenStartAmount:0.00} to {amount:0.00}) after {DoorOpenWaitSeconds:0} s; walking on");
-            FinishDoorPush(door, now);
-            return false;
+            report = $"partly open (turned {turned:0} degrees) after {DoorOpenWaitSeconds:0} s; walking on";
+            return DoorPushState.PartlyOpen;
         }
 
-        MelonLoader.MelonLogger.Msg($"[walk] {name} did not open: pushed and pulled, HowOpen at {amount:0.00} (was {_walkDoorOpenStartAmount:0.00})");
-        door.rigidBody.angularVelocity = Vector3.zero;
-        _walkOpeningDoor = null;
-        StopAutoWalk("door did not open");
-        SpeakWalk($"{name} is closed and did not open. Open it, then walk again");
-        return true;
-    }
-
-    private void FinishDoorPush(Il2Cpp.DoorOpenable door, float now)
-    {
-        door.rigidBody.angularVelocity = Vector3.zero;
-        _walkOpeningDoor = null;
-        _nextWalkReplanTime = now + WalkReplanSeconds;
-        _walkProgressTime = now;
+        report = $"pushed and pulled, turned {turned:0} degrees, HowOpen {door.HowOpen():0.00}";
+        return DoorPushState.Failed;
     }
 
     /// <summary>+1 when turning the body about the hinge axis moves the door's middle away from the player.</summary>

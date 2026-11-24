@@ -156,10 +156,11 @@ public sealed partial class KillerFrequencyAccessMod
 
     private float _loggedCrouchedHeight = -1f;
 
-    /// <summary>Logs the CharacterController height whenever the game has the player crouched, to check the passage height used.</summary>
+    /// <summary>Logs the settled crouched CharacterController height (0.91 on 2026-11-23, under the 1.05 m crouched head used).</summary>
     private void LogCrouchedController(CharacterController controller)
     {
-        if (IsCrouching() && Mathf.Abs(controller.height - _loggedCrouchedHeight) > 0.01f)
+        var player = GetFlatScreenPlayer();
+        if (IsCrouching() && player != null && !player.transitioningBetweenMoveModes && Mathf.Abs(controller.height - _loggedCrouchedHeight) > 0.01f)
         {
             _loggedCrouchedHeight = controller.height;
             MelonLoader.MelonLogger.Msg($"[walk] crouched CharacterController height {controller.height:0.00}, radius {controller.radius:0.00}, centre {controller.center}");

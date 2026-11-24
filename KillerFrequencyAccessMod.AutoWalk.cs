@@ -298,6 +298,17 @@ public sealed partial class KillerFrequencyAccessMod
 
             if (target == null || !target.gameObject.activeInHierarchy)
             {
+                if (target != null)
+                {
+                    var inactive = target;
+                    while (inactive.parent != null && inactive.parent.gameObject.activeInHierarchy == false && inactive.gameObject.activeSelf)
+                    {
+                        inactive = inactive.parent;
+                    }
+
+                    MelonLoader.MelonLogger.Msg($"[walk] target {BuildHierarchyPath(target)} inactive (self active {target.gameObject.activeSelf}, inactive from {BuildHierarchyPath(inactive)}), at {target.position}");
+                }
+
                 StopAutoWalk("target gone");
                 return;
             }
