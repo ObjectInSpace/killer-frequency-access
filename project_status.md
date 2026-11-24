@@ -50,9 +50,11 @@ data generated from the rip. Where a fact is unknown, the mod logs it instead of
   (VinylPlayer, CassettePlayer, Dictaphone, SoundBoard, FuseBox, NumericKeypad, HandheldRadio,
   FloppyDiskComputer, Lever, Board). The studio's phone-line buttons sit on `P_HeroProp_ConsoleMixer_05`,
   which has no component, so they are their own entries next to the soundboard (a part of that console).
-- Hidden: a room's contents while the player is elsewhere and all its doorways are closed (its doors
-  stay; a plain `RoomPortal` is always open), and anything below a closed `Openable`. Loose items in
-  cabinets and the fridge are not children of them (rip: no slots), so they are still listed.
+- Hidden (changed 2026-11-23 at the user's request: closed no longer hides, locked does): a room's
+  contents while the player is elsewhere and all its doors are locked (`Openable.IsLocked()`; its doors
+  stay listed), and anything below a locked `Openable` except a `NumericKeypad` (the safe's keypad is on
+  its own locked door). Locked Openables are logged once as `[list] locked:`. Loose items in cabinets and
+  the fridge are not children of them (rip: no slots), so they are always listed.
 - Actions spoken for the object you point at use `CanPerform(interactor)` (first run: `Available`
   was true for drop and throw on items not held), each with its keys read live from the game's
   `InputActions` asset ("pick up, left click or numpad 0"). Interactions with no

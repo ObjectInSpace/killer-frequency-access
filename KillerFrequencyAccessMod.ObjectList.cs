@@ -30,8 +30,10 @@ namespace Killer_Frequency_Access;
 ///   (VinylPlayer, CassettePlayer, SoundBoard, ... the list in tools/rip/gen_names.py DEVICES, plus Board).
 ///   An object's parent in the list is its nearest such ancestor, at any depth. Loose items inside cabinets and the fridge are not
 ///   children of them (rip: no slots), so they stand on their own.
-/// - Hidden: contents of a room the player is not in whose doorways are all closed (its doors stay listed),
-///   and everything below a closed Openable (Openable.IsFullyClosed).
+/// - Hidden (user request 2026-11-23: closed is not a reason to hide, locked is): contents of a room the
+///   player is not in whose doors are all locked (its doors stay listed; a door counts as passable when
+///   open or not Openable.IsLocked()), and what is below a locked Openable, except a NumericKeypad: the
+///   game's code entry for the safe sits on the safe's own door, which stays locked until the code is in.
 /// - Keys: the game's InputActions asset leaves Home, End, Page Up, Page Down and Backspace unbound.
 /// </summary>
 public sealed partial class KillerFrequencyAccessMod
@@ -81,7 +83,8 @@ public sealed partial class KillerFrequencyAccessMod
         public readonly HashSet<int> RoomIds = new();
         public readonly List<string> LeadsTo = new();
         public int Id => Transform.GetInstanceID();
-        public bool IsClosed => Openable != null && !IsRoomDoor && Openable.IsFullyClosed();
+        public bool IsKeypad;
+        public bool IsLocked => Openable != null && !IsRoomDoor && Openable.IsLocked();
     }
 
     // Kept for callers outside the list (auto-walk): whether the list is at the rooms level.
@@ -182,15 +185,9 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
-        if (node.IsClosed)
-        {
-            SpeakSelectionText($"{node.Name} is closed");
-            return;
-        }
-
         if (Group(_depth + 1).Count == 0)
         {
-            SpeakSelectionText($"Nothing in {node.Name}");
+            SpeakSelectionText(node.IsLocked ? $"{node.Name} is locked" : $"Nothing in {node.Name}");
             return;
         }
 
@@ -267,8 +264,9 @@ public sealed partial class KillerFrequencyAccessMod
     }
 
     /// <summary>
-    /// The members of the group at a depth, nearest first: the room's own objects at depth 1 (a closed room
-    /// shows only its doors), otherwise the children of the node selected one level up (none while it is closed).
+    /// The members of the group at a depth, nearest first: the room's own objects at depth 1 (a room behind
+    /// locked doors shows only its doors), otherwise the children of the node selected one level up (while it
+    /// is locked, only its keypad).
     /// </summary>
     private List<ListNode> Group(int depth)
     {
@@ -303,7 +301,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         var owner = SelectedNode(depth - 1);
-        if (owner == null || owner.IsClosed)
+        if (owner == null)
         {
             return new List<ListNode>();
         }
@@ -311,7 +309,7 @@ public sealed partial class KillerFrequencyAccessMod
         var ownerKey = (depth, owner.Id);
         if (!_groupMemo.TryGetValue(ownerKey, out var children))
         {
-            children = new List<ListNode>(owner.Children);
+            children = owner.IsLocked ? owner.Children.FindAll(n => n.IsKeypad) : new List<ListNode>(owner.Children);
             SortNearest(children, n => n.Transform);
             _groupMemo[ownerKey] = children;
         }
@@ -339,7 +337,7 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             var room = SelectedRoom();
-            var closed = IsRoomAccessible(room) ? string.Empty : ", closed";
+            var closed = IsRoomAccessible(room) ? string.Empty : ", locked";
             return $"{_roomChoices[_roomIndex].Label}{closed}, {Group(1).Count} objects, {_roomIndex + 1} of {_roomChoices.Count}";
         }
 
@@ -367,13 +365,15 @@ public sealed partial class KillerFrequencyAccessMod
             }
         }
 
-        if (node.IsClosed)
+        if (node.IsLocked)
         {
-            parts.Add("closed");
+            parts.Add("locked");
         }
-        else if (node.Children.Count > 0)
+
+        var shown = node.IsLocked ? node.Children.FindAll(n => n.IsKeypad).Count : node.Children.Count;
+        if (shown > 0)
         {
-            parts.Add(node.Children.Count == 1 ? "1 item" : $"{node.Children.Count} items");
+            parts.Add(shown == 1 ? "1 item" : $"{shown} items");
         }
 
         if (TryGetNavigationOrigin(out var origin))
@@ -470,7 +470,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         _depth = chain.Count;
-        if (!target.IsClosed && target.Children.Count > 0)
+        if (target.Children.Count > 0 && (!target.IsLocked || target.Children.Exists(n => n.IsKeypad)))
         {
             // A container: list what is in it.
             _depth++;
@@ -566,7 +566,7 @@ public sealed partial class KillerFrequencyAccessMod
             var back = portal._backRoom != null && roomsById.TryGetValue(portal._backRoom.GetInstanceID(), out var b) ? b : null;
             var doorPortal = portal.TryCast<Il2Cpp.RoomPortalDoor>();
             var door = doorPortal?._door;
-            if (doorPortal == null || door == null || doorPortal.isOpen)
+            if (doorPortal == null || door == null || doorPortal.isOpen || !door.IsLocked())
             {
                 if (front != null) _accessibleRoomIds.Add(front.Id);
                 if (back != null) _accessibleRoomIds.Add(back.Id);
@@ -642,6 +642,8 @@ public sealed partial class KillerFrequencyAccessMod
         _roomIndex = _selectedRoomId == -1 ? 0 : Math.Max(0, _roomChoices.FindIndex(c => c.Room != null && c.Room.Id == _selectedRoomId));
     }
 
+    private static readonly HashSet<int> LoggedLockedIds = new();
+
     private ListNode GetOrCreateNode(Transform transform, Dictionary<int, List<RoomInfo>> doorRooms)
     {
         var id = transform.GetInstanceID();
@@ -654,8 +656,13 @@ public sealed partial class KillerFrequencyAccessMod
         {
             Transform = transform,
             Openable = transform.GetComponent<Il2Cpp.Openable>(),
+            IsKeypad = transform.GetComponent<Il2Cpp.NumericKeypad>() != null,
         };
         node.Name = DeviceLabel(transform) ?? GetSpokenName(transform);
+        if (node.Openable != null && node.Openable.IsLocked() && LoggedLockedIds.Add(id))
+        {
+            MelonLoader.MelonLogger.Msg($"[list] locked: {node.Name} ({transform.name})");
+        }
         if (doorRooms.TryGetValue(id, out var joined))
         {
             node.IsRoomDoor = true;
