@@ -88,8 +88,15 @@ public sealed partial class KillerFrequencyAccessMod
             return;
         }
 
-        JoinFloorsAtDoorways(step);
-        JoinFloorGaps(step);
+        try
+        {
+            JoinFloorsAtDoorways(step);
+            JoinFloorGaps(step);
+        }
+        catch (Exception ex)
+        {
+            LogOnce($"join-error|{ex.Message}", $"[nav] joining floor pieces failed: {ex}");
+        }
     }
 
     /// <summary>

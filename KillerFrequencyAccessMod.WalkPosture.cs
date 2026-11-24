@@ -158,14 +158,17 @@ public sealed partial class KillerFrequencyAccessMod
         var controller = player.characterController;
         var radius = controller != null ? controller.radius : 0.15f;
         var feet = GetFeet(origin);
-        var bottom = feet + Vector3.up * (radius + 0.3f);
-        var top = feet + Vector3.up * (standing + 0.2f - radius);
-        // The mask includes layer 0 (bits 262657 in SCN_Main), so the player's own collider and anything
-        // held under it are skipped.
+        // Rays straight up over the body's footprint (centre and four sides), from 0.3 m above the feet to
+        // the standing head; Physics.OverlapCapsule may be stripped like CapsuleCastAll (see PhysicsQueries).
+        // The mask includes layer 0 (bits 262657 in SCN_Main), so the player's own hierarchy is skipped.
         var playerRoot = player.transform.root;
-        foreach (var hit in Physics.OverlapCapsule(bottom, top, radius, player.crouchCheckLayerMask.value, QueryTriggerInteraction.Ignore))
+        var low = 0.3f;
+        var high = standing + 0.2f;
+        var offsets = new[] { Vector3.zero, Vector3.forward * radius, Vector3.back * radius, Vector3.left * radius, Vector3.right * radius };
+        foreach (var offset in offsets)
         {
-            if (hit != null && hit.transform.root != playerRoot)
+            if (TryRaycastFirst(feet + offset + Vector3.up * low, Vector3.up, high - low, player.crouchCheckLayerMask.value,
+                    collider => collider.transform.root != playerRoot, out var hit, out _))
             {
                 LogOnce($"walk-headroom|{hit.name}", $"[walk] headroom blocked by {BuildHierarchyPath(hit.transform)}");
                 return false;

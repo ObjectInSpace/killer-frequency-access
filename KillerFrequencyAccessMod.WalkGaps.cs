@@ -12,7 +12,8 @@ namespace Killer_Frequency_Access;
 /// 2026-11-23 run said "no path".
 ///
 /// Each gap from NavGraph.FindGapCandidates is checked against the scene's colliders with the player's own
-/// body: a capsule of the CharacterController's radius swept from one side to the other, from just above
+/// body: the CharacterController's radius moved from one side to the other (a grid of rays: see
+/// PhysicsQueries), from just above
 /// the step height up to the crouched head (crouched eye height plus the radius; the crouched controller
 /// height is set at runtime by FlatScreenPlayer.AdjustCharacterControllerHeight and is not in the rip),
 /// over floor at the midpoint. A gap that also clears the standing head (standing eye height plus 0.2 m,
@@ -89,33 +90,19 @@ public sealed partial class KillerFrequencyAccessMod
         return true;
     }
 
-    /// <summary>A capsule of <paramref name="radius"/> spanning heights bottom..top above <paramref name="from"/>, swept across.</summary>
+    /// <summary>A body of <paramref name="radius"/> spanning heights bottom..top above <paramref name="from"/>, moved across.</summary>
     private bool IsSweepBlocked(Vector3 from, Vector3 direction, float distance, float bottom, float top, float radius, Transform playerRoot)
     {
-        var p1 = from + Vector3.up * bottom;
-        var p2 = from + Vector3.up * Mathf.Max(bottom, top - radius);
-        foreach (var hit in Physics.CapsuleCastAll(p1, p2, radius, direction, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-        {
-            if (IsSolidForWalking(hit.collider, playerRoot))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return TrySweepBody(from, direction, distance, bottom, top, radius, Physics.DefaultRaycastLayers,
+            collider => IsSolidForWalking(collider, playerRoot), out _, out _);
     }
 
     private bool IsFloorUnder(Vector3 point, float step, Transform playerRoot)
     {
-        foreach (var hit in Physics.RaycastAll(point + Vector3.up * (step + 0.2f), Vector3.down, 2f * step + 0.4f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-        {
-            if (IsSolidForWalking(hit.collider, playerRoot) && Mathf.Abs(hit.point.y - point.y) <= step)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        var origin = point + Vector3.up * (step + 0.2f);
+        return TryRaycastFirst(origin, Vector3.down, 2f * step + 0.4f, Physics.DefaultRaycastLayers,
+                   collider => IsSolidForWalking(collider, playerRoot), out _, out var distance)
+               && Mathf.Abs(origin.y - distance - point.y) <= step;
     }
 
     private bool IsSolidForWalking(Collider? collider, Transform playerRoot)

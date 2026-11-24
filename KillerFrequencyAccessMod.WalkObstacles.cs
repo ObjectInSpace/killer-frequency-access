@@ -326,24 +326,11 @@ public sealed partial class KillerFrequencyAccessMod
     /// </summary>
     private static bool TryCastPlayerCapsule(CharacterController controller, Vector3 feet, Vector3 direction, float distance, out Collider blocker)
     {
-        blocker = null!;
-        var radius = controller.radius;
-        var bottom = feet + Vector3.up * (controller.stepOffset + radius);
-        var top = feet + Vector3.up * Math.Max(controller.stepOffset + radius, controller.height - radius);
         var playerRoot = controller.transform.root;
-        var nearest = float.MaxValue;
-        foreach (var hit in Physics.CapsuleCastAll(bottom, top, radius, direction, distance, PlayerCollisionMask(controller.gameObject.layer), QueryTriggerInteraction.Ignore))
-        {
-            if (hit.collider == null || hit.collider.transform.root == playerRoot || hit.distance >= nearest)
-            {
-                continue;
-            }
-
-            nearest = hit.distance;
-            blocker = hit.collider;
-        }
-
-        return blocker != null;
+        var bottom = controller.stepOffset + 0.02f;
+        var top = Math.Max(bottom, controller.height - 0.02f);
+        return TrySweepBody(feet, direction, distance, bottom, top, controller.radius, PlayerCollisionMask(controller.gameObject.layer),
+            collider => collider.transform.root != playerRoot, out blocker, out _);
     }
 
     private static int _playerCollisionMask = -1;
