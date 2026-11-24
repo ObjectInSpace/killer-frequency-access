@@ -516,6 +516,37 @@ internal sealed class NavGraph
         return result;
     }
 
+    /// <summary>For every polygon within <paramref name="radius"/> of the point, its closest point to it.</summary>
+    public void PointsNear(Vector3 point, float radius, List<Vector3> result)
+    {
+        var seen = new HashSet<int>();
+        for (var gx = Cell(point.x - radius); gx <= Cell(point.x + radius); gx++)
+        {
+            for (var gz = Cell(point.z - radius); gz <= Cell(point.z + radius); gz++)
+            {
+                if (!_grid.TryGetValue((gx, gz), out var candidates))
+                {
+                    continue;
+                }
+
+                foreach (var i in candidates)
+                {
+                    if (!seen.Add(i))
+                    {
+                        continue;
+                    }
+
+                    var poly = _polys[i];
+                    var onPoly = TryHeightInside(poly, point.x, point.z, out var y) ? new Vector3(point.x, y, point.z) : ClosestOnEdges(poly, point);
+                    if (Vector3.Distance(onPoly, point) <= radius)
+                    {
+                        result.Add(onPoly);
+                    }
+                }
+            }
+        }
+    }
+
     /// <summary>The height of every polygon (every floor) whose x/z covers the point.</summary>
     public void FloorHeightsAt(float x, float z, List<float> heights)
     {

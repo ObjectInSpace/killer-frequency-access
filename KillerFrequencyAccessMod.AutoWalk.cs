@@ -60,6 +60,7 @@ public sealed partial class KillerFrequencyAccessMod
 
     /// <summary>A route failed because the two ends are on separate parts of the walking graph.</summary>
     private bool _walkFloorNotConnected;
+    private bool _walkNoFloorInRoom;
 
     private void StartAutoWalkToSelectedTarget()
     {
@@ -137,6 +138,7 @@ public sealed partial class KillerFrequencyAccessMod
         // crouched), so spots are searched in both postures and the walk takes the spot's posture.
         _sightBlockers.Clear();
         _walkFloorNotConnected = false;
+        _walkNoFloorInRoom = false;
         FindStandpointsBothPostures(origin, target);
         _walkStandpointIndex = 0;
         BeginWalkPosture();
@@ -148,9 +150,11 @@ public sealed partial class KillerFrequencyAccessMod
         if (!PlanWalk(GetFeet(origin), target, "start"))
         {
             StopAutoWalk($"no path to {name}");
-            SpeakWalk(_walkFloorNotConnected
-                ? $"No path to {name}: the floor where you stand does not connect to it"
-                : $"No path to {name}");
+            SpeakWalk(_walkNoFloorInRoom
+                ? $"No place found to stand and reach {name}"
+                : _walkFloorNotConnected
+                    ? $"No path to {name}: the floor where you stand does not connect to it"
+                    : $"No path to {name}");
             return;
         }
 
@@ -181,7 +185,49 @@ public sealed partial class KillerFrequencyAccessMod
         }
     }
 
-    /// <summary>Route from the NavMesh: player's nearest NavMesh point to the current spot (or the target's nearest point).</summary>
+    private const float FallbackFloorMeters = 3f;
+
+    /// <summary>
+    /// Where to walk when no standing spot sees the target: the closest floor to it that is in the target's
+    /// own room (Room OcclusionArea boxes, as the object list) and reachable from the player. The closest
+    /// floor alone was across a wall: the school play pamphlet and collectables sleeve 09 walks ended in
+    /// Basement Right, beside the room they are in (2026-11-23 run).
+    /// </summary>
+    private bool TryFloorInTargetRoom(NavGraph graph, Transform target, Vector3 from, out Vector3 floor)
+    {
+        floor = default;
+        var point = GetNearestPoint(target, from);
+        var room = RoomOf(point);
+        var startRegion = graph.TryClosestPoint(from, NavSnapMeters, out var start) ? graph.RegionAt(start, out _) : -1;
+        var candidates = new List<Vector3>();
+        graph.PointsNear(point, FallbackFloorMeters, candidates);
+        var best = float.MaxValue;
+        foreach (var candidate in candidates)
+        {
+            if (RoomOf(candidate + Vector3.up * 0.5f) != room || graph.RegionAt(candidate, out _) != startRegion)
+            {
+                continue;
+            }
+
+            var distance = Vector3.Distance(candidate, point);
+            if (distance < best)
+            {
+                best = distance;
+                floor = candidate;
+            }
+        }
+
+        if (best < float.MaxValue)
+        {
+            MelonLoader.MelonLogger.Msg($"[walk] no spot sees {GetSpokenName(target)}; walking to the closest floor in {room?.Name ?? "no room"} ({best:0.0} m from it)");
+            return true;
+        }
+
+        MelonLoader.MelonLogger.Msg($"[walk] no spot sees {GetSpokenName(target)}, and no floor you can reach within {FallbackFloorMeters:0} m of it is in {room?.Name ?? "no room"}");
+        return false;
+    }
+
+    /// <summary>Route from the NavMesh: player's nearest NavMesh point to the current spot (or floor beside the target).</summary>
     private bool PlanWalkToCurrentSpot(Vector3 from, Transform target, string reason)
     {
         _walkCorners.Clear();
@@ -191,13 +237,21 @@ public sealed partial class KillerFrequencyAccessMod
         _walkProgressPosition = from;
         _walkProgressTime = now;
 
-        var goal = _walkStandpointIndex < _walkStandpoints.Count
-            ? _walkStandpoints[_walkStandpointIndex]
-            : GetNearestPoint(target, from);
         var graph = GetLiveNavGraph();
         if (graph == null)
         {
             MelonLoader.MelonLogger.Msg($"[walk] {reason}: no walking graph for this scene");
+            return false;
+        }
+
+        Vector3 goal;
+        if (_walkStandpointIndex < _walkStandpoints.Count)
+        {
+            goal = _walkStandpoints[_walkStandpointIndex];
+        }
+        else if (!TryFloorInTargetRoom(graph, target, from, out goal))
+        {
+            _walkNoFloorInRoom = true;
             return false;
         }
 
