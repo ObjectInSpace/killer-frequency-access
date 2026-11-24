@@ -267,11 +267,164 @@ internal sealed class NavGraph
 
         var middle = (a + b) * 0.5f;
         var onPlane = middle - doorway.normal * doorway.GetDistanceToPoint(middle);
-        _links[polyA] = Append(_links[polyA], (polyB, onPlane, onPlane));
-        _links[polyB] = Append(_links[polyB], (polyA, onPlane, onPlane));
+        result = Join(polyA, polyB, onPlane, crouch: false) + $", gap {Vector3.Distance(a, b):0.00} m";
+        return true;
+    }
+
+    /// <summary>Points where a route must be walked crouched (joins through low openings).</summary>
+    public readonly List<Vector3> CrouchPassages = new();
+
+    /// <summary>Set once the floor gaps of this graph have been checked against the scene's colliders.</summary>
+    public bool GapsChecked;
+
+    public readonly struct GapCandidate
+    {
+        public readonly Vector3 A;
+        public readonly Vector3 B;
+        public readonly int PolyA;
+        public readonly int PolyB;
+        public readonly float Gap;
+
+        public GapCandidate(Vector3 a, Vector3 b, int polyA, int polyB, float gap)
+        {
+            A = a;
+            B = b;
+            PolyA = polyA;
+            PolyB = polyB;
+            Gap = gap;
+        }
+    }
+
+    public bool SameRegion(int polyA, int polyB) => _region[polyA] == _region[polyB];
+
+    public int RegionSize(int poly) => _regionSize[_region[poly]];
+
+    /// <summary>
+    /// Places where two parts of the floor come within <paramref name="maxGap"/> of each other (in x/z) and
+    /// <paramref name="maxStep"/> in height: points along every outer polygon edge (one with no neighbour
+    /// link), every <paramref name="sampleStep"/>, paired with the closest edge of a polygon in another
+    /// region. Smallest gap first. Whether the gap can be walked is for the caller to check against the
+    /// scene (a wall between two rooms is a gap too).
+    /// </summary>
+    public List<GapCandidate> FindGapCandidates(float maxGap, float maxStep, float sampleStep)
+    {
+        var result = new List<GapCandidate>();
+        // Every gap has at least one side off the largest region, so only those polygons are sampled.
+        var largest = 0;
+        for (var r = 1; r < _regionSize.Count; r++)
+        {
+            if (_regionSize[r] > _regionSize[largest])
+            {
+                largest = r;
+            }
+        }
+
+        for (var i = 0; i < _polys.Length; i++)
+        {
+            if (_region[i] == largest)
+            {
+                continue;
+            }
+
+            var poly = _polys[i];
+            for (var k = 0; k < poly.Length; k++)
+            {
+                var p = poly[k];
+                var q = poly[(k + 1) % poly.Length];
+                if (IsLinkedEdge(i, p, q))
+                {
+                    continue;
+                }
+
+                var length = new Vector2(q.x - p.x, q.z - p.z).magnitude;
+                var steps = Math.Max(1, Mathf.CeilToInt(length / sampleStep));
+                for (var s = 0; s <= steps; s++)
+                {
+                    var point = Vector3.Lerp(p, q, s / (float)steps);
+                    var bestGap = maxGap;
+                    var bestPoly = -1;
+                    var bestPoint = point;
+                    for (var gx = Cell(point.x - maxGap); gx <= Cell(point.x + maxGap); gx++)
+                    {
+                        for (var gz = Cell(point.z - maxGap); gz <= Cell(point.z + maxGap); gz++)
+                        {
+                            if (!_grid.TryGetValue((gx, gz), out var candidates))
+                            {
+                                continue;
+                            }
+
+                            foreach (var j in candidates)
+                            {
+                                if (_region[j] == _region[i])
+                                {
+                                    continue;
+                                }
+
+                                var other = ClosestOnEdges(_polys[j], point);
+                                var gap = new Vector2(other.x - point.x, other.z - point.z).magnitude;
+                                if (gap <= bestGap && Math.Abs(other.y - point.y) <= maxStep)
+                                {
+                                    bestGap = gap;
+                                    bestPoly = j;
+                                    bestPoint = other;
+                                }
+                            }
+                        }
+                    }
+
+                    if (bestPoly >= 0)
+                    {
+                        result.Add(new GapCandidate(point, bestPoint, i, bestPoly, bestGap));
+                    }
+                }
+            }
+        }
+
+        result.Sort((x, y) => x.Gap.CompareTo(y.Gap));
+        return result;
+    }
+
+    /// <summary>Whether a neighbour link's shared edge lies on the edge p-q (it is not an outer edge).</summary>
+    private bool IsLinkedEdge(int poly, Vector3 p, Vector3 q)
+    {
+        foreach (var (_, a, b) in _links[poly])
+        {
+            if (DistanceToSegment(a, p, q) < 0.02f && DistanceToSegment(b, p, q) < 0.02f)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static float DistanceToSegment(Vector3 x, Vector3 p, Vector3 q)
+    {
+        var pq = q - p;
+        var t = pq.sqrMagnitude < 1e-9f ? 0f : Mathf.Clamp01(Vector3.Dot(x - p, pq) / pq.sqrMagnitude);
+        return Vector3.Distance(x, p + pq * t);
+    }
+
+    /// <summary>
+    /// Links two polygons in different regions through a zero-width portal at <paramref name="at"/> (routes
+    /// pass through that point) and merges the regions. Crouch joins are remembered in CrouchPassages.
+    /// </summary>
+    public string Join(int polyA, int polyB, Vector3 at, bool crouch)
+    {
+        _links[polyA] = Append(_links[polyA], (polyB, at, at));
+        _links[polyB] = Append(_links[polyB], (polyA, at, at));
+        if (crouch)
+        {
+            CrouchPassages.Add(at);
+        }
 
         var keep = _region[polyA];
         var merge = _region[polyB];
+        if (keep == merge)
+        {
+            return $"linked at {at}";
+        }
+
         var moved = 0;
         for (var i = 0; i < _region.Length; i++)
         {
@@ -284,8 +437,7 @@ internal sealed class NavGraph
 
         _regionSize[keep] += moved;
         _regionSize[merge] = 0;
-        result = $"joined {moved} polygons to {_regionSize[keep] - moved} at {onPlane}, gap {Vector3.Distance(a, b):0.00} m";
-        return true;
+        return $"joined {moved} polygons to {_regionSize[keep] - moved} at {at}";
     }
 
     private static (int, Vector3, Vector3)[] Append((int, Vector3, Vector3)[] links, (int, Vector3, Vector3) link)

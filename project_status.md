@@ -255,6 +255,16 @@ answer offline first; ask for a run only when the answer exists only at runtime.
   turning the rigidbody about its hinge as `FsArcSegmentMotionHandler` does (spring and gravity off,
   its maxAngularVelocity, push away then pull), restored once the player is past; floor pieces joined
   through every `RoomPortal` (`[nav] doorway` lines).
+- Same run, later: `FlatScreenPlayer.instance` is evidently null in SCN_Main. Eye heights were
+  "unreadable" (spots for the current posture only: dictaphone 6 and the school play pamphlet have 9
+  crouched spots and none standing, so standing walks aimed from nowhere), and the walk never changed
+  posture all session. The player is now the FlatScreenPlayer on the interactor's object.
+  Dictaphone 5 is behind the broken basement wall (collider 0.7-1.65 m above the floor over 1.5 m), a
+  72-polygon piece 0.95 m from the main floor: crouch only. Floor gaps up to 1.2 m and the live
+  `stepOffset` are now checked with a capsule of the player's radius (step to crouched head = crouched eye
+  plus radius; standing head = standing eye plus 0.2) and joined, crouch passages walked crouched
+  (`[nav] gap`, `[walk] posture: crouching for a low passage`). The crouched controller height is logged
+  to check that head height. Route ends no longer move through walls onto another piece.
 - Unverified at runtime: whether `ConfigureForMoveMode` alone behaves like the crouch key; detours around
   obstacles; the sweep; the walking graphs of SCN_Intro, SCN_Menu and SCN_Epilogue.
 - Deferred (user, 2026-11-23): pinboard items and post-its have no standing spots. The pinboard has its

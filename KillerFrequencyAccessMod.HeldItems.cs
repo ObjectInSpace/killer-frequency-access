@@ -420,7 +420,7 @@ public sealed partial class KillerFrequencyAccessMod
     {
         if (_placeHandler == null)
         {
-            _placeHandler = Il2Cpp.FlatScreenPlayer.instance != null ? Il2Cpp.FlatScreenPlayer.instance.fsPlaceHandler : null;
+            _placeHandler = GetFlatScreenPlayer()?.fsPlaceHandler;
             if (_placeHandler == null && TryGetPlayerInteractor(out var interactor))
             {
                 _placeHandler = interactor.GetComponentInChildren<Il2Cpp.FsPlaceHandler>(true);

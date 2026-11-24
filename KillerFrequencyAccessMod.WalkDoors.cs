@@ -81,7 +81,15 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         LogOnce($"walk-doors|{_walkDoors.Count}", $"[walk] {_walkDoors.Count} hinged doors, {_doorByColliderId.Count} door colliders, layer mask 0x{_doorLayerMask:X}");
-        JoinFloorsAtDoorways();
+        var step = GetFlatScreenPlayer()?.characterController?.stepOffset ?? 0f;
+        if (step <= 0f)
+        {
+            LogOnce("walk-no-step", "[nav] CharacterController.stepOffset unreadable; floor pieces not joined");
+            return;
+        }
+
+        JoinFloorsAtDoorways(step);
+        JoinFloorGaps(step);
     }
 
     /// <summary>
@@ -106,10 +114,10 @@ public sealed partial class KillerFrequencyAccessMod
 
     /// <summary>
     /// Joins floor pieces the bake split at a doorway, through the game's own doorways: every
-    /// Il2Cpp.RoomPortal (plane and centre). The player's CharacterController.stepOffset (0.3 m, rip) is the
+    /// Il2Cpp.RoomPortal (plane and centre). The player's CharacterController.stepOffset (0.3 m in the rip, read live) is the
     /// largest height step allowed. Already joined graphs report "already connected" and change nothing.
     /// </summary>
-    private static void JoinFloorsAtDoorways()
+    private static void JoinFloorsAtDoorways(float step)
     {
         var graph = GetLiveNavGraph();
         if (graph == null)
@@ -129,7 +137,7 @@ public sealed partial class KillerFrequencyAccessMod
             centre -= plane.normal * plane.GetDistanceToPoint(centre);
             var sideA = centre + plane.normal * DoorwaySideMeters;
             var sideB = centre - plane.normal * DoorwaySideMeters;
-            if (graph.TryConnectAcross(sideA, sideB, plane, DoorwaySnapMeters, 0.3f, out var result))
+            if (graph.TryConnectAcross(sideA, sideB, plane, DoorwaySnapMeters, step, out var result))
             {
                 MelonLoader.MelonLogger.Msg($"[nav] doorway {portal.name}: {result}");
             }

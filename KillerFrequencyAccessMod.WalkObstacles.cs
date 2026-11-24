@@ -42,7 +42,7 @@ public sealed partial class KillerFrequencyAccessMod
     /// </summary>
     private bool TryHandleBlocker(Transform origin)
     {
-        var player = Il2Cpp.FlatScreenPlayer.instance;
+        var player = GetFlatScreenPlayer();
         var controller = player != null ? player.characterController : null;
         if (controller == null || _walkCornerIndex >= _walkCorners.Count)
         {

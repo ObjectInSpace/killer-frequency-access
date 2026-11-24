@@ -286,7 +286,7 @@ public sealed partial class KillerFrequencyAccessMod
             }
 
             // Stand to walk; take the spot's posture for the last stretch.
-            UpdateWalkPosture(origin, RemainingRouteMeters(GetFeet(origin)) <= WalkStandBeyondMeters);
+            UpdateWalkPosture(origin, RemainingRouteMeters(GetFeet(origin)) <= WalkStandBeyondMeters, IsCrouchPassageNear(GetFeet(origin)));
 
             // Walking along the NavMesh route.
             var corner = _walkCorners[_walkCornerIndex];
@@ -409,10 +409,36 @@ public sealed partial class KillerFrequencyAccessMod
         SpeakWalk($"Could not reach {GetSpokenName(target)}. It is {DescribeWhere(origin, GetNearestPoint(target, origin.position))}. Pointing at {observed}");
     }
 
+    /// <summary>
+    /// The player: the FlatScreenPlayer on the interactor's object (PlayerController), else the static
+    /// FlatScreenPlayer.instance. The static alone was not enough: in the 2026-11-23 run the eye heights were
+    /// "unreadable" and the walk never changed posture all session, while the feet (read through the
+    /// player's own component) were fine.
+    /// </summary>
+    private static Il2Cpp.FlatScreenPlayer? GetFlatScreenPlayer()
+    {
+        if (TryGetNavigationOrigin(out var origin))
+        {
+            var player = origin.GetComponent<Il2Cpp.FlatScreenPlayer>();
+            if (player != null)
+            {
+                return player;
+            }
+        }
+
+        var instance = Il2Cpp.FlatScreenPlayer.instance;
+        if (instance == null)
+        {
+            LogOnce("walk-no-flatscreenplayer", "[walk] no FlatScreenPlayer on the player object and FlatScreenPlayer.instance is null");
+        }
+
+        return instance;
+    }
+
     /// <summary>The game's own move mode: FlatScreenPlayer.currentMoveMode is CROUCH.</summary>
     private static bool IsCrouching()
     {
-        var player = Il2Cpp.FlatScreenPlayer.instance;
+        var player = GetFlatScreenPlayer();
         return player != null && player.currentMoveMode == Il2Cpp.PlayerMoveModes.CROUCH;
     }
 
@@ -423,7 +449,7 @@ public sealed partial class KillerFrequencyAccessMod
     private static bool TryGetEyeHeights(out float standing, out float crouched)
     {
         standing = crouched = 0f;
-        var player = Il2Cpp.FlatScreenPlayer.instance;
+        var player = GetFlatScreenPlayer();
         if (player == null)
         {
             return false;
@@ -432,7 +458,13 @@ public sealed partial class KillerFrequencyAccessMod
         var height = player.playerHeight;
         standing = height._maxPlayerHeight;
         crouched = height._minPlayerHeight;
-        return standing > 0f && crouched > 0f;
+        if (standing > 0f && crouched > 0f)
+        {
+            return true;
+        }
+
+        LogOnce($"walk-eye-heights|{standing}|{crouched}", $"[walk] PlayerBase.playerHeight reads standing {standing}, crouched {crouched}");
+        return false;
     }
 
     /// <summary>The player's eye height above the feet now, for the posture the game reports.</summary>
@@ -450,13 +482,13 @@ public sealed partial class KillerFrequencyAccessMod
     /// <summary>The game's foot location (PlayerBase.GetFootLocation); the player transform is not at the feet.</summary>
     private static Vector3 GetFeet(Transform origin)
     {
-        var player = origin.GetComponent<Il2Cpp.FlatScreenPlayer>() ?? Il2Cpp.FlatScreenPlayer.instance;
+        var player = origin.GetComponent<Il2Cpp.FlatScreenPlayer>() ?? GetFlatScreenPlayer();
         if (player != null)
         {
             return player.GetFootLocation();
         }
 
-        LogOnce("walk-no-player-feet", "[walk] FlatScreenPlayer.instance is null; using the player transform for the feet");
+        LogOnce("walk-no-player-feet", "[walk] no FlatScreenPlayer on the player; using the player transform for the feet");
         return origin.position;
     }
 

@@ -89,9 +89,14 @@ public sealed partial class KillerFrequencyAccessMod
     /// Applies the posture the walk wants now. True while a posture change is under way (the eye height
     /// is moving, so aiming must wait).
     /// </summary>
-    private bool UpdateWalkPosture(Transform origin, bool finalStretch)
+    private bool UpdateWalkPosture(Transform origin, bool finalStretch, bool passage = false)
     {
-        var player = Il2Cpp.FlatScreenPlayer.instance;
+        var player = GetFlatScreenPlayer();
+        if (player?.characterController != null)
+        {
+            LogCrouchedController(player.characterController);
+        }
+
         if (!_walkManagesPosture || player == null)
         {
             return false;
@@ -112,7 +117,7 @@ public sealed partial class KillerFrequencyAccessMod
         }
 
         var spotCrouched = _walkStandpointIndex < _walkStandpointCrouched.Count && _walkStandpointCrouched[_walkStandpointIndex];
-        var wantCrouch = finalStretch && spotCrouched;
+        var wantCrouch = passage || (finalStretch && spotCrouched);
         if (wantCrouch == crouchedNow)
         {
             _walkRequestedCrouch = crouchedNow;
@@ -135,7 +140,7 @@ public sealed partial class KillerFrequencyAccessMod
         player.currentMoveMode = mode;
         player.ConfigureForMoveMode(mode);
         _walkRequestedCrouch = wantCrouch;
-        MelonLoader.MelonLogger.Msg($"[walk] posture: {(wantCrouch ? "crouching for the spot" : finalStretch ? "standing for the spot" : "standing to walk")} (ConfigureForMoveMode {mode})");
+        MelonLoader.MelonLogger.Msg($"[walk] posture: {(wantCrouch ? (passage ? "crouching for a low passage" : "crouching for the spot") : finalStretch ? "standing for the spot" : "standing to walk")} (ConfigureForMoveMode {mode})");
         return true;
     }
 
